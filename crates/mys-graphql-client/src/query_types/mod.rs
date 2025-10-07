@@ -16,7 +16,6 @@ mod object;
 mod packages;
 mod protocol_config;
 mod service_config;
-mod mysns;
 mod transaction;
 
 pub use active_validators::ActiveValidatorsArgs;
@@ -94,10 +93,6 @@ pub use protocol_config::ProtocolVersionArgs;
 pub use service_config::Feature;
 pub use service_config::ServiceConfig;
 pub use service_config::ServiceConfigQuery;
-pub use mysns::DefaultMySocialnsNameQuery;
-pub use mysns::DefaultMySocialnsNameQueryArgs;
-pub use mysns::ResolveMySocialnsQuery;
-pub use mysns::ResolveMySocialnsQueryArgs;
 pub use transaction::TransactionBlock;
 pub use transaction::TransactionBlockArgs;
 pub use transaction::TransactionBlockEffectsQuery;

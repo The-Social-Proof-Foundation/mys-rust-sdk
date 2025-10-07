@@ -98,7 +98,7 @@ pub struct Validator {
     /// Pending stake amount for this epoch.
     pub pending_stake: Option<BigInt>,
     /// Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
-    pub pending_total_mys_withdraw: Option<BigInt>,
+    pub pending_total_my_social_withdraw: Option<BigInt>,
     /// Total number of pool tokens issued by the pool.
     pub pool_token_balance: Option<BigInt>,
     /// Validator's homepage URL.
@@ -110,7 +110,7 @@ pub struct Validator {
     /// The ID of this validator's `0x3::staking_pool::StakingPool`.
     pub staking_pool_id: Address,
     /// The total number of MYS tokens in this pool.
-    pub staking_pool_mys_balance: Option<BigInt>,
+    pub staking_pool_my_social_balance: Option<BigInt>,
     /// The voting power of this validator in basis points (e.g., 100 = 1% voting power).
     pub voting_power: Option<i32>,
 }

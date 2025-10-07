@@ -22,8 +22,6 @@ use query_types::CheckpointsQuery;
 use query_types::CoinMetadata;
 use query_types::CoinMetadataArgs;
 use query_types::CoinMetadataQuery;
-use query_types::DefaultMySocialnsNameQuery;
-use query_types::DefaultMySocialnsNameQueryArgs;
 use query_types::DryRunArgs;
 use query_types::DryRunQuery;
 use query_types::DynamicFieldArgs;
@@ -64,8 +62,6 @@ use query_types::PageInfo;
 use query_types::ProtocolConfigQuery;
 use query_types::ProtocolConfigs;
 use query_types::ProtocolVersionArgs;
-use query_types::ResolveMySocialnsQuery;
-use query_types::ResolveMySocialnsQueryArgs;
 use query_types::ServiceConfig;
 use query_types::ServiceConfigQuery;
 use query_types::TransactionBlockArgs;
@@ -1680,39 +1676,6 @@ impl Client {
         Ok(response.data.and_then(|p| p.package).and_then(|p| p.module))
     }
 
-    // ===========================================================================
-    // MySocialNS
-    // ===========================================================================
-
-    /// Get the address for the provided MySocialns domain name.
-    pub async fn resolve_mysns_to_address(&self, domain: &str) -> Result<Option<Address>> {
-        let operation = ResolveMySocialnsQuery::build(ResolveMySocialnsQueryArgs { name: domain });
-
-        let response = self.run_query(&operation).await?;
-
-        if let Some(errors) = response.errors {
-            return Err(Error::graphql_error(errors));
-        }
-        Ok(response
-            .data
-            .and_then(|d| d.resolve_mysns_address)
-            .map(|a| a.address))
-    }
-
-    /// Get the default MySocialns domain name for the provided address.
-    pub async fn default_mysns_name(&self, address: Address) -> Result<Option<String>> {
-        let operation = DefaultMySocialnsNameQuery::build(DefaultMySocialnsNameQueryArgs { address });
-
-        let response = self.run_query(&operation).await?;
-
-        if let Some(errors) = response.errors {
-            return Err(Error::graphql_error(errors));
-        }
-        Ok(response
-            .data
-            .and_then(|d| d.address)
-            .and_then(|a| a.default_mysns_name))
-    }
 }
 
 // This function is used in tests to create a new client instance for the local server.

@@ -6,7 +6,7 @@ use mys_sdk_types::MultisigMemberPublicKey;
 use mys_sdk_types::MultisigMemberSignature;
 use mys_sdk_types::UserSignature;
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct MultisigVerifier {
     #[cfg(feature = "zklogin")]
     zklogin_verifier: Option<crate::zklogin::ZkloginVerifier>,
@@ -71,17 +71,32 @@ impl MultisigVerifier {
                     .ok_or_else(|| SignatureError::from_source("no zklogin verifier provided"))?;
 
                 // verify that the member identifier and the authenticator match
-                if zklogin_identifier
-                    != &crate::zklogin::zklogin_identifier_from_inputs(
-                        &zklogin_authenticator.inputs,
-                    )?
-                {
+                if zklogin_identifier != zklogin_authenticator.inputs.public_identifier() {
                     return Err(SignatureError::from_source(
                         "member zklogin identifier does not match signature",
                     ));
                 }
 
                 zklogin_verifier.verify(message, zklogin_authenticator.as_ref())
+            }
+
+            #[cfg(not(feature = "passkey"))]
+            (MultisigMemberPublicKey::Passkey(_), MultisigMemberSignature::Passkey(_)) => Err(
+                SignatureError::from_source("support for passkey is not enabled"),
+            ),
+            #[cfg(feature = "passkey")]
+            (
+                MultisigMemberPublicKey::Passkey(passkey_public_key),
+                MultisigMemberSignature::Passkey(passkey_authenticator),
+            ) => {
+                // Verify that the member pubkey matches the authenticator
+                if passkey_public_key != &passkey_authenticator.public_key() {
+                    return Err(SignatureError::from_source(
+                        "member passkey public_key does not match authenticator",
+                    ));
+                }
+
+                crate::passkey::PasskeyVerifier::default().verify(message, passkey_authenticator)
             }
 
             _ => Err(SignatureError::from_source(
@@ -197,7 +212,7 @@ impl Iterator for BitmapIndices {
 }
 
 /// Verifier that will verify all UserSignature variants
-#[derive(Default)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct UserSignatureVerifier {
     inner: MultisigVerifier,
 }
@@ -231,7 +246,6 @@ impl Verifier<UserSignature> for UserSignatureVerifier {
                 crate::simple::SimpleVerifier.verify(message, simple_signature)
             }
             UserSignature::Multisig(multisig) => self.inner.verify(message, multisig),
-
             #[cfg(not(feature = "zklogin"))]
             UserSignature::ZkLogin(_) => Err(SignatureError::from_source(
                 "support for zklogin is not enabled",
@@ -252,10 +266,12 @@ impl Verifier<UserSignature> for UserSignatureVerifier {
             UserSignature::Passkey(passkey_authenticator) => {
                 crate::passkey::PasskeyVerifier::default().verify(message, passkey_authenticator)
             }
+            _ => Err(SignatureError::from_source("unknown signature scheme")),
         }
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct MultisigAggregator {
     committee: MultisigCommittee,
     signatures: std::collections::BTreeMap<usize, MultisigMemberSignature>,
@@ -324,7 +340,7 @@ impl MultisigAggregator {
             Entry::Occupied(_) => {
                 return Err(SignatureError::from_source(
                     "duplicate signature from same committee member",
-                ))
+                ));
             }
         }
 
@@ -333,7 +349,7 @@ impl MultisigAggregator {
         Ok(())
     }
 
-    pub fn finish(&mut self) -> Result<MultisigAggregatedSignature, SignatureError> {
+    pub fn finish(&self) -> Result<MultisigAggregatedSignature, SignatureError> {
         if self.signed_weight < self.committee.threshold() {
             return Err(SignatureError::from_source(
                 "insufficient signature weight to reach threshold",
@@ -390,16 +406,25 @@ fn multisig_pubkey_and_signature_from_user_signature(
         )),
         #[cfg(feature = "zklogin")]
         UserSignature::ZkLogin(zklogin_authenticator) => {
-            let zklogin_identifier =
-                crate::zklogin::zklogin_identifier_from_inputs(&zklogin_authenticator.inputs)?;
+            let zklogin_identifier = zklogin_authenticator.inputs.public_identifier().to_owned();
             Ok((
                 MultisigMemberPublicKey::ZkLogin(zklogin_identifier),
                 MultisigMemberSignature::ZkLogin(zklogin_authenticator),
             ))
         }
 
-        UserSignature::Multisig(_) | UserSignature::Passkey(_) => {
-            Err(SignatureError::from_source("invalid siganture scheme"))
-        }
+        #[cfg(not(feature = "passkey"))]
+        UserSignature::Passkey(_) => Err(SignatureError::from_source(
+            "support for passkey is not enabled",
+        )),
+        #[cfg(feature = "passkey")]
+        UserSignature::Passkey(passkey_authenticator) => Ok((
+            MultisigMemberPublicKey::Passkey(passkey_authenticator.public_key()),
+            MultisigMemberSignature::Passkey(passkey_authenticator),
+        )),
+
+        UserSignature::Multisig(_) => Err(SignatureError::from_source("invalid siganture scheme")),
+
+        _ => Err(SignatureError::from_source("unknown siganture scheme")),
     }
 }

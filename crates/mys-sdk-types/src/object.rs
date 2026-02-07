@@ -1,14 +1,23 @@
 use std::collections::BTreeMap;
 
 use super::Address;
+use super::Digest;
 use super::Identifier;
-use super::ObjectDigest;
-use super::ObjectId;
 use super::StructTag;
-use super::TransactionDigest;
 
 pub type Version = u64;
 
+/// Reference to an object
+///
+/// Contains sufficient information to uniquely identify a specific object.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// object-ref = address u64 digest
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(
     feature = "serde",
@@ -16,14 +25,17 @@ pub type Version = u64;
 )]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct ObjectReference {
-    object_id: ObjectId,
-    #[cfg_attr(feature = "serde", serde(with = "crate::_serde::ReadableDisplay"))]
+    /// The object id of this object.
+    object_id: Address,
+    /// The version of this object.
     version: Version,
-    digest: ObjectDigest,
+    /// The digest of this object.
+    digest: Digest,
 }
 
 impl ObjectReference {
-    pub fn new(object_id: ObjectId, version: Version, digest: ObjectDigest) -> Self {
+    /// Creates a new object reference from the object's id, version, and digest.
+    pub fn new(object_id: Address, version: Version, digest: Digest) -> Self {
         Self {
             object_id,
             version,
@@ -31,19 +43,23 @@ impl ObjectReference {
         }
     }
 
-    pub fn object_id(&self) -> &ObjectId {
+    /// Returns a reference to the object id that this ObjectReference is referring to.
+    pub fn object_id(&self) -> &Address {
         &self.object_id
     }
 
+    /// Returns the version of the object that this ObjectReference is referring to.
     pub fn version(&self) -> Version {
         self.version
     }
 
-    pub fn digest(&self) -> &ObjectDigest {
+    /// Returns the digest of the object that this ObjectReference is referring to.
+    pub fn digest(&self) -> &Digest {
         &self.digest
     }
 
-    pub fn into_parts(self) -> (ObjectId, Version, ObjectDigest) {
+    /// Returns a 3-tuple containing the object id, version, and digest.
+    pub fn into_parts(self) -> (Address, Version, Digest) {
         let Self {
             object_id,
             version,
@@ -54,6 +70,20 @@ impl ObjectReference {
     }
 }
 
+/// Enum of different types of ownership for an object.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// owner = owner-address / owner-object / owner-shared / owner-immutable
+///
+/// owner-address   = %x00 address
+/// owner-object    = %x01 address
+/// owner-shared    = %x02 u64
+/// owner-immutable = %x03
+/// ```
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(
     feature = "serde",
@@ -61,25 +91,44 @@ impl ObjectReference {
     serde(rename_all = "lowercase")
 )]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
+#[non_exhaustive]
 pub enum Owner {
-    /// # Address Owned
     /// Object is exclusively owned by a single address, and is mutable.
     Address(Address),
-    /// # Object Owned
     /// Object is exclusively owned by a single object, and is mutable.
-    Object(ObjectId),
-    /// # Shared Object
+    Object(Address),
     /// Object is shared, can be used by any address, and is mutable.
     Shared(
         /// The version at which the object became shared
-        #[cfg_attr(feature = "serde", serde(with = "crate::_serde::ReadableDisplay"))]
         Version,
     ),
-    /// # Immutable
     /// Object is immutable, and hence ownership doesn't matter.
     Immutable,
+
+    /// Object is exclusively owned by a single address and sequenced via consensus.
+    ConsensusAddress {
+        /// The version at which the object most recently became a consensus object.
+        /// This serves the same function as `initial_shared_version`, except it may change
+        /// if the object's Owner type changes.
+        start_version: Version,
+
+        /// The owner of the object.
+        owner: Address,
+    },
 }
 
+/// Object data, either a package or struct
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// object-data = object-data-struct / object-data-package
+///
+/// object-data-struct  = %x00 object-move-struct
+/// object-data-package = %x01 object-move-package
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "serde",
@@ -93,11 +142,22 @@ pub enum ObjectData {
     Struct(MoveStruct),
     /// Map from each module name to raw serialized Move module bytes
     Package(MovePackage),
-    // ... MySocial "native" types go here
+    // ... MySo "native" types go here
 }
 
-// serde_bytes::ByteBuf is an analog of Vec<u8> with built-in fast serialization.
-// #[serde_as]
+/// A move package
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// object-move-package = address u64 move-modules type-origin-table linkage-table
+///
+/// move-modules = map (identifier bytes)
+/// type-origin-table = vector type-origin
+/// linkage-table = map (address upgrade-info)
+/// ```
 #[derive(Eq, PartialEq, Debug, Clone, Hash)]
 #[cfg_attr(
     feature = "serde",
@@ -105,7 +165,9 @@ pub enum ObjectData {
 )]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct MovePackage {
-    pub id: ObjectId,
+    /// Address or Id of this package
+    pub id: Address,
+
     /// Most move packages are uniquely identified by their ID (i.e. there is only one version per
     /// ID), but the version is still stored because one package may be an upgrade of another (at a
     /// different ID), in which case its version will be one greater than the version of the
@@ -116,9 +178,9 @@ pub struct MovePackage {
     ///
     /// In all cases, packages are referred to by move calls using just their ID, and they are
     /// always loaded at their latest version.
-    #[cfg_attr(feature = "serde", serde(with = "crate::_serde::ReadableDisplay"))]
     pub version: Version,
 
+    /// Set of modules defined by this package
     #[cfg_attr(
         feature = "serde",
         serde(with = "::serde_with::As::<BTreeMap<::serde_with::Same, ::serde_with::Bytes>>")
@@ -133,20 +195,29 @@ pub struct MovePackage {
 
     /// Maps struct/module to a package version where it was first defined, stored as a vector for
     /// simple serialization and deserialization.
+    #[cfg_attr(feature = "proptest", any(proptest::collection::size_range(0..=1).lift()))]
     pub type_origin_table: Vec<TypeOrigin>,
 
-    // For each dependency, maps original package ID to the info about the (upgraded) dependency
-    // version that this package is using
+    /// For each dependency, maps original package ID to the info about the (upgraded) dependency
+    /// version that this package is using
     #[cfg_attr(
         feature = "proptest",
         strategy(
-            proptest::collection::btree_map(proptest::arbitrary::any::<ObjectId>(), proptest::arbitrary::any::<UpgradeInfo>(), 0..=5)
+            proptest::collection::btree_map(proptest::arbitrary::any::<Address>(), proptest::arbitrary::any::<UpgradeInfo>(), 0..=5)
         )
     )]
-    pub linkage_table: BTreeMap<ObjectId, UpgradeInfo>,
+    pub linkage_table: BTreeMap<Address, UpgradeInfo>,
 }
 
 /// Identifies a struct and the module it was defined in
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// type-origin = identifier identifier address
+/// ```
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[cfg_attr(
     feature = "serde",
@@ -156,10 +227,18 @@ pub struct MovePackage {
 pub struct TypeOrigin {
     pub module_name: Identifier,
     pub struct_name: Identifier,
-    pub package: ObjectId,
+    pub package: Address,
 }
 
 /// Upgraded package info for the linkage table
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// upgrade-info = address u64
+/// ```
 #[derive(Eq, PartialEq, Debug, Clone, Hash)]
 #[cfg_attr(
     feature = "serde",
@@ -168,12 +247,29 @@ pub struct TypeOrigin {
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct UpgradeInfo {
     /// Id of the upgraded packages
-    pub upgraded_id: ObjectId,
+    pub upgraded_id: Address,
     /// Version of the upgraded package
-    #[cfg_attr(feature = "serde", serde(with = "crate::_serde::ReadableDisplay"))]
     pub upgraded_version: Version,
 }
 
+/// A move struct
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// object-move-struct = compressed-struct-tag bool u64 object-contents
+///
+/// compressed-struct-tag = other-struct-type / gas-coin-type / staked-mys-type / coin-type
+/// other-struct-type     = %x00 struct-tag
+/// gas-coin-type         = %x01
+/// staked-mys-type       = %x02
+/// coin-type             = %x03 type-tag
+///
+/// ; first 32 bytes of the contents are the object's address
+/// object-contents = uleb128 (address *OCTET) ; length followed by contents
+/// ```
 #[derive(Eq, PartialEq, Debug, Clone, Hash)]
 //TODO hand-roll a Deserialize impl to enforce that an objectid is present
 #[cfg_attr(
@@ -182,29 +278,32 @@ pub struct UpgradeInfo {
 )]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct MoveStruct {
-    /// The type of this object. Immutable
+    /// The type of this object
     #[cfg_attr(
         feature = "serde",
         serde(with = "::serde_with::As::<serialization::BinaryMoveStructType>")
     )]
     pub(crate) type_: StructTag,
+
     /// DEPRECATED this field is no longer used to determine whether a tx can transfer this
     /// object. Instead, it is always calculated from the objects type when loaded in execution
     has_public_transfer: bool,
+
     /// Number that increases each time a tx takes this object as a mutable input
     /// This is a lamport timestamp, not a sequentially increasing version
-    #[cfg_attr(feature = "serde", serde(with = "crate::_serde::ReadableDisplay"))]
     version: Version,
+
     /// BCS bytes of a Move struct value
     #[cfg_attr(
         feature = "serde",
-        serde(with = "::serde_with::As::<::serde_with::Bytes>")
+        serde(with = "crate::_serde::ReadableBase64Encoded")
     )]
     #[cfg_attr(feature = "proptest", any(proptest::collection::size_range(32..=1024).lift()))]
     pub(crate) contents: Vec<u8>,
 }
 
 impl MoveStruct {
+    /// Construct a move struct
     pub fn new(
         type_: StructTag,
         has_public_transfer: bool,
@@ -219,28 +318,39 @@ impl MoveStruct {
         })
     }
 
+    /// Return the type of the struct
     pub fn object_type(&self) -> &StructTag {
         &self.type_
     }
 
+    /// Return if this object can be publicly transferred
+    ///
+    /// DEPRECATED
+    ///
+    /// This field is no longer used to determine whether a tx can transfer this object. Instead,
+    /// it is always calculated from the objects type when loaded in execution.
+    #[doc(hidden)]
     pub fn has_public_transfer(&self) -> bool {
         self.has_public_transfer
     }
 
+    /// Return the version of this object
     pub fn version(&self) -> Version {
         self.version
     }
 
+    /// Return the raw contents of this struct
     pub fn contents(&self) -> &[u8] {
         &self.contents
     }
 
-    pub fn object_id(&self) -> ObjectId {
+    /// Return the ObjectId of this object
+    pub fn object_id(&self) -> Address {
         id_opt(self.contents()).unwrap()
     }
 }
 
-/// Type of a MySocial object
+/// Type of a MySo object
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum ObjectType {
     /// Move package containing one or more bytecode modules
@@ -249,15 +359,31 @@ pub enum ObjectType {
     Struct(StructTag),
 }
 
+/// An object on the mys blockchain
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// object = object-data owner digest u64
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct Object {
     /// The meat of the object
     pub(crate) data: ObjectData,
+
     /// The owner that unlocks this object
     owner: Owner,
+
     /// The digest of the transaction that created or last mutated this object
-    previous_transaction: TransactionDigest,
+    previous_transaction: Digest,
+
     /// The amount of MYS we would rebate if this object gets deleted.
     /// This number is re-calculated each time the object is mutated based on
     /// the present storage gas price.
@@ -265,10 +391,11 @@ pub struct Object {
 }
 
 impl Object {
+    /// Build an object
     pub fn new(
         data: ObjectData,
         owner: Owner,
-        previous_transaction: TransactionDigest,
+        previous_transaction: Digest,
         storage_rebate: u64,
     ) -> Self {
         Self {
@@ -279,13 +406,15 @@ impl Object {
         }
     }
 
-    pub fn object_id(&self) -> ObjectId {
+    /// Return this object's id
+    pub fn object_id(&self) -> Address {
         match &self.data {
             ObjectData::Struct(struct_) => id_opt(&struct_.contents).unwrap(),
             ObjectData::Package(package) => package.id,
         }
     }
 
+    /// Return this object's version
     pub fn version(&self) -> Version {
         match &self.data {
             ObjectData::Struct(struct_) => struct_.version,
@@ -293,6 +422,7 @@ impl Object {
         }
     }
 
+    /// Return this object's type
     pub fn object_type(&self) -> ObjectType {
         match &self.data {
             ObjectData::Struct(struct_) => ObjectType::Struct(struct_.type_.clone()),
@@ -300,33 +430,58 @@ impl Object {
         }
     }
 
+    /// Try to interpret this object as a move struct
+    pub fn as_struct(&self) -> Option<&MoveStruct> {
+        match &self.data {
+            ObjectData::Struct(struct_) => Some(struct_),
+            _ => None,
+        }
+    }
+
+    /// Return this object's owner
     pub fn owner(&self) -> &Owner {
         &self.owner
     }
 
+    /// Return this object's data
     pub fn data(&self) -> &ObjectData {
         &self.data
     }
 
-    pub fn previous_transaction(&self) -> TransactionDigest {
+    /// Return the digest of the transaction that last modified this object
+    pub fn previous_transaction(&self) -> Digest {
         self.previous_transaction
     }
 
+    /// Return the storage rebate locked in this object
+    ///
+    /// Storage rebates are credited to the gas coin used in a transaction that deletes this
+    /// object.
     pub fn storage_rebate(&self) -> u64 {
         self.storage_rebate
     }
 }
 
-fn id_opt(contents: &[u8]) -> Option<ObjectId> {
-    if ObjectId::LENGTH > contents.len() {
+fn id_opt(contents: &[u8]) -> Option<Address> {
+    if Address::LENGTH > contents.len() {
         return None;
     }
 
-    Some(ObjectId::from(
-        Address::from_bytes(&contents[..ObjectId::LENGTH]).unwrap(),
-    ))
+    Some(Address::from_bytes(&contents[..Address::LENGTH]).unwrap())
 }
 
+/// An object part of the initial chain state
+///
+/// `GenesisObject`'s are included as a part of genesis, the initial checkpoint/transaction, that
+/// initializes the state of the blockchain.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// genesis-object = object-data owner
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct GenesisObject {
@@ -339,7 +494,7 @@ impl GenesisObject {
         Self { data, owner }
     }
 
-    pub fn object_id(&self) -> ObjectId {
+    pub fn object_id(&self) -> Address {
         match &self.data {
             ObjectData::Struct(struct_) => id_opt(&struct_.contents).unwrap(),
             ObjectData::Package(package) => package.id,
@@ -373,9 +528,6 @@ impl GenesisObject {
 #[cfg(feature = "serde")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "serde")))]
 mod serialization {
-    use std::borrow::Cow;
-    use std::str::FromStr;
-
     use serde::Deserialize;
     use serde::Deserializer;
     use serde::Serialize;
@@ -385,42 +537,6 @@ mod serialization {
 
     use super::*;
     use crate::TypeTag;
-
-    #[test]
-    fn obj() {
-        let o = Object {
-            data: ObjectData::Struct(MoveStruct {
-                type_: StructTag {
-                    address: Address::TWO,
-                    module: Identifier::new("bar").unwrap(),
-                    name: Identifier::new("foo").unwrap(),
-                    type_params: Vec::new(),
-                },
-                has_public_transfer: true,
-                version: 12,
-                contents: ObjectId::ZERO.into(),
-            }),
-            // owner: Owner::Address(Address::ZERO),
-            owner: Owner::Object(ObjectId::ZERO),
-            // owner: Owner::Immutable,
-            // owner: Owner::Shared {
-            //     initial_shared_version: 14,
-            // },
-            previous_transaction: TransactionDigest::ZERO,
-            storage_rebate: 100,
-        };
-
-        println!("{}", serde_json::to_string_pretty(&o).unwrap());
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&ObjectReference {
-                object_id: ObjectId::ZERO,
-                version: 1,
-                digest: ObjectDigest::ZERO,
-            })
-            .unwrap()
-        );
-    }
 
     /// Wrapper around StructTag with a space-efficient representation for common types like coins
     /// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win.
@@ -432,10 +548,17 @@ mod serialization {
         Other(StructTag),
         /// A MYS coin (i.e., `0x2::coin::Coin<0x2::mys::MYS>`)
         GasCoin,
-        /// A record of a staked MYS coin (i.e., `0x3::staking_pool::StakedMySocial`)
-        StakedMySocial,
+        /// A record of a staked MYS coin (i.e., `0x3::staking_pool::StakedSui`)
+        StakedSui,
         /// A non-MYS coin type (i.e., `0x2::coin::Coin<T> where T != 0x2::mys::MYS`)
         Coin(TypeTag),
+        /// A MYS balance accumulator field
+        /// (i.e., `0x2::dynamic_field::Field<0x2::accumulator::Key<0x2::balance::Balance<0x2::mys::MYS>>, 0x2::accumulator::U128>`)
+        SuiBalanceAccumulatorField,
+        /// A non-MYS balance accumulator field
+        /// (i.e., `0x2::dynamic_field::Field<0x2::accumulator::Key<0x2::balance::Balance<T>>, 0x2::accumulator::U128>`
+        /// where T != 0x2::mys::MYS)
+        BalanceAccumulatorField(TypeTag),
         // NOTE: if adding a new type here, and there are existing on-chain objects of that
         // type with Other(_), that is ok, but you must hand-roll PartialEq/Eq/Ord/maybe Hash
         // to make sure the new type and Other(_) are interpreted consistently.
@@ -448,10 +571,17 @@ mod serialization {
         Other(&'a StructTag),
         /// A MYS coin (i.e., `0x2::coin::Coin<0x2::mys::MYS>`)
         GasCoin,
-        /// A record of a staked MYS coin (i.e., `0x3::staking_pool::StakedMySocial`)
-        StakedMySocial,
+        /// A record of a staked MYS coin (i.e., `0x3::staking_pool::StakedSui`)
+        StakedSui,
         /// A non-MYS coin type (i.e., `0x2::coin::Coin<T> where T != 0x2::mys::MYS`)
         Coin(&'a TypeTag),
+        /// A MYS balance accumulator field
+        /// (i.e., `0x2::dynamic_field::Field<0x2::accumulator::Key<0x2::balance::Balance<0x2::mys::MYS>>, 0x2::accumulator::U128>`)
+        SuiBalanceAccumulatorField,
+        /// A non-MYS balance accumulator field
+        /// (i.e., `0x2::dynamic_field::Field<0x2::accumulator::Key<0x2::balance::Balance<T>>, 0x2::accumulator::U128>`
+        /// where T != 0x2::mys::MYS)
+        BalanceAccumulatorField(&'a TypeTag),
         // NOTE: if adding a new type here, and there are existing on-chain objects of that
         // type with Other(_), that is ok, but you must hand-roll PartialEq/Eq/Ord/maybe Hash
         // to make sure the new type and Other(_) are interpreted consistently.
@@ -462,46 +592,47 @@ mod serialization {
             match self {
                 MoveStructType::Other(tag) => tag,
                 MoveStructType::GasCoin => StructTag::gas_coin(),
-                MoveStructType::StakedMySocial => StructTag::staked_mys(),
+                MoveStructType::StakedSui => StructTag::staked_sui(),
                 MoveStructType::Coin(type_tag) => StructTag::coin(type_tag),
+                MoveStructType::SuiBalanceAccumulatorField => {
+                    StructTag::balance_accumulator_field(StructTag::mys().into())
+                }
+                MoveStructType::BalanceAccumulatorField(type_tag) => {
+                    StructTag::balance_accumulator_field(type_tag)
+                }
             }
         }
     }
 
     impl<'a> MoveStructTypeRef<'a> {
         fn from_struct_tag(s: &'a StructTag) -> Self {
-            let StructTag {
-                address,
-                module,
-                name,
-                type_params,
-            } = s;
+            let address = s.address();
+            let module = s.module();
+            let name = s.name();
+            let type_params = s.type_params();
 
             if let Some(coin_type) = s.is_coin() {
-                if let TypeTag::Struct(s_inner) = coin_type {
-                    let StructTag {
-                        address,
-                        module,
-                        name,
-                        type_params,
-                    } = s_inner.as_ref();
-
-                    if address == &Address::TWO
-                        && module == "mys"
-                        && name == "MYS"
-                        && type_params.is_empty()
-                    {
-                        return Self::GasCoin;
-                    }
+                if let TypeTag::Struct(s_inner) = coin_type
+                    && s_inner.is_gas()
+                {
+                    Self::GasCoin
+                } else {
+                    Self::Coin(coin_type)
                 }
-
-                Self::Coin(coin_type)
             } else if address == &Address::THREE
                 && module == "staking_pool"
-                && name == "StakedMySocial"
+                && name == "StakedSui"
                 && type_params.is_empty()
             {
-                Self::StakedMySocial
+                Self::StakedSui
+            } else if let Some(coin_type) = s.is_balance_accumulator_field() {
+                if let TypeTag::Struct(s_inner) = coin_type
+                    && s_inner.is_gas()
+                {
+                    Self::SuiBalanceAccumulatorField
+                } else {
+                    Self::BalanceAccumulatorField(coin_type)
+                }
             } else {
                 Self::Other(s)
             }
@@ -530,249 +661,9 @@ mod serialization {
         }
     }
 
-    struct ReadableObjectType;
-
-    impl SerializeAs<ObjectType> for ReadableObjectType {
-        fn serialize_as<S>(source: &ObjectType, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            match source {
-                ObjectType::Package => "package".serialize(serializer),
-                ObjectType::Struct(s) => s.serialize(serializer),
-            }
-        }
-    }
-
-    impl<'de> DeserializeAs<'de, ObjectType> for ReadableObjectType {
-        fn deserialize_as<D>(deserializer: D) -> Result<ObjectType, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-            if s == "package" {
-                Ok(ObjectType::Package)
-            } else {
-                let struct_tag = StructTag::from_str(&s)
-                    .map_err(|_| serde::de::Error::custom("invalid object type"))?;
-                Ok(ObjectType::Struct(struct_tag))
-            }
-        }
-    }
-
-    #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
-    #[serde(rename = "Object")]
-    struct ReadableObject {
-        object_id: ObjectId,
-        #[serde(with = "crate::_serde::ReadableDisplay")]
-        version: Version,
-        owner: Owner,
-
-        #[serde(with = "::serde_with::As::<ReadableObjectType>")]
-        #[serde(rename = "type")]
-        type_: ObjectType,
-
-        #[serde(flatten)]
-        data: ReadableObjectData,
-
-        previous_transaction: TransactionDigest,
-        #[serde(with = "crate::_serde::ReadableDisplay")]
-        storage_rebate: u64,
-    }
-
-    #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
-    #[serde(untagged)]
-    enum ReadableObjectData {
-        Move(ReadableMoveStruct),
-        Package(ReadablePackage),
-    }
-
-    #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
-    struct ReadablePackage {
-        #[serde(
-            with = "::serde_with::As::<BTreeMap<::serde_with::Same, crate::_serde::Base64Encoded>>"
-        )]
-        modules: BTreeMap<Identifier, Vec<u8>>,
-        type_origin_table: Vec<TypeOrigin>,
-        linkage_table: BTreeMap<ObjectId, UpgradeInfo>,
-    }
-
-    #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
-    struct ReadableMoveStruct {
-        has_public_transfer: bool,
-        #[serde(with = "::serde_with::As::<crate::_serde::Base64Encoded>")]
-        contents: Vec<u8>,
-    }
-
-    impl Object {
-        fn readable_object_data(&self) -> ReadableObjectData {
-            match &self.data {
-                ObjectData::Struct(struct_) => ReadableObjectData::Move(ReadableMoveStruct {
-                    has_public_transfer: struct_.has_public_transfer,
-                    contents: struct_.contents.clone(),
-                }),
-                ObjectData::Package(package) => ReadableObjectData::Package(ReadablePackage {
-                    modules: package.modules.clone(),
-                    type_origin_table: package.type_origin_table.clone(),
-                    linkage_table: package.linkage_table.clone(),
-                }),
-            }
-        }
-    }
-
-    impl Serialize for Object {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
-        {
-            if serializer.is_human_readable() {
-                let readable = ReadableObject {
-                    object_id: self.object_id(),
-                    version: self.version(),
-                    // digest: todo!(),
-                    owner: self.owner,
-                    previous_transaction: self.previous_transaction,
-                    storage_rebate: self.storage_rebate,
-                    type_: self.object_type(),
-                    data: self.readable_object_data(),
-                };
-                readable.serialize(serializer)
-            } else {
-                let binary = BinaryObject {
-                    data: self.data.clone(),
-                    owner: self.owner,
-                    previous_transaction: self.previous_transaction,
-                    storage_rebate: self.storage_rebate,
-                };
-                binary.serialize(serializer)
-            }
-        }
-    }
-
-    impl<'de> Deserialize<'de> for Object {
-        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            if deserializer.is_human_readable() {
-                let ReadableObject {
-                    object_id,
-                    version,
-                    owner,
-                    previous_transaction,
-                    storage_rebate,
-                    type_,
-                    data,
-                } = Deserialize::deserialize(deserializer)?;
-
-                // check if package or struct
-                let data = match (type_, data) {
-                    (
-                        ObjectType::Package,
-                        ReadableObjectData::Package(ReadablePackage {
-                            modules,
-                            type_origin_table,
-                            linkage_table,
-                        }),
-                    ) => ObjectData::Package(MovePackage {
-                        id: object_id,
-                        version,
-                        modules,
-                        type_origin_table,
-                        linkage_table,
-                    }),
-                    (
-                        ObjectType::Struct(type_),
-                        ReadableObjectData::Move(ReadableMoveStruct {
-                            has_public_transfer,
-                            contents,
-                        }),
-                    ) => {
-                        // check id matches in contents
-                        // switch to if id_opt(&contents).is_none_or(|id| id != object_id) when the
-                        // API of is_none_or is stabilized as now this would fail in wasm tests
-                        #[allow(clippy::nonminimal_bool)]
-                        if !id_opt(&contents).is_some_and(|id| id == object_id) {
-                            return Err(serde::de::Error::custom("id from contents doesn't match"));
-                        }
-
-                        ObjectData::Struct(MoveStruct {
-                            type_,
-                            has_public_transfer,
-                            version,
-                            contents,
-                        })
-                    }
-                    _ => return Err(serde::de::Error::custom("type and data don't match")),
-                };
-
-                Ok(Object {
-                    data,
-                    owner,
-                    previous_transaction,
-                    storage_rebate,
-                })
-            } else {
-                let BinaryObject {
-                    data,
-                    owner,
-                    previous_transaction,
-                    storage_rebate,
-                } = Deserialize::deserialize(deserializer)?;
-
-                Ok(Object {
-                    data,
-                    owner,
-                    previous_transaction,
-                    storage_rebate,
-                })
-            }
-        }
-    }
-
-    #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
-    struct BinaryObject {
-        data: ObjectData,
-        owner: Owner,
-        previous_transaction: TransactionDigest,
-        storage_rebate: u64,
-    }
-
-    #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
-    #[serde(rename = "GenesisObject")]
-    struct ReadableGenesisObject {
-        object_id: ObjectId,
-        #[serde(with = "crate::_serde::ReadableDisplay")]
-        version: Version,
-        owner: Owner,
-
-        #[serde(with = "::serde_with::As::<ReadableObjectType>")]
-        #[serde(rename = "type")]
-        type_: ObjectType,
-
-        #[serde(flatten)]
-        data: ReadableObjectData,
-    }
-
     #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
     enum BinaryGenesisObject {
         RawObject { data: ObjectData, owner: Owner },
-    }
-
-    impl GenesisObject {
-        fn readable_object_data(&self) -> ReadableObjectData {
-            match &self.data {
-                ObjectData::Struct(struct_) => ReadableObjectData::Move(ReadableMoveStruct {
-                    has_public_transfer: struct_.has_public_transfer,
-                    contents: struct_.contents.clone(),
-                }),
-                ObjectData::Package(package) => ReadableObjectData::Package(ReadablePackage {
-                    modules: package.modules.clone(),
-                    type_origin_table: package.type_origin_table.clone(),
-                    linkage_table: package.linkage_table.clone(),
-                }),
-            }
-        }
     }
 
     impl Serialize for GenesisObject {
@@ -780,22 +671,11 @@ mod serialization {
         where
             S: Serializer,
         {
-            if serializer.is_human_readable() {
-                let readable = ReadableGenesisObject {
-                    object_id: self.object_id(),
-                    version: self.version(),
-                    owner: self.owner,
-                    type_: self.object_type(),
-                    data: self.readable_object_data(),
-                };
-                readable.serialize(serializer)
-            } else {
-                let binary = BinaryGenesisObject::RawObject {
-                    data: self.data.clone(),
-                    owner: self.owner,
-                };
-                binary.serialize(serializer)
-            }
+            let binary = BinaryGenesisObject::RawObject {
+                data: self.data.clone(),
+                owner: self.owner,
+            };
+            binary.serialize(serializer)
         }
     }
 
@@ -804,68 +684,17 @@ mod serialization {
         where
             D: Deserializer<'de>,
         {
-            if deserializer.is_human_readable() {
-                let ReadableGenesisObject {
-                    object_id,
-                    version,
-                    owner,
-                    type_,
-                    data,
-                } = Deserialize::deserialize(deserializer)?;
+            let BinaryGenesisObject::RawObject { data, owner } =
+                Deserialize::deserialize(deserializer)?;
 
-                // check if package or struct
-                let data = match (type_, data) {
-                    (
-                        ObjectType::Package,
-                        ReadableObjectData::Package(ReadablePackage {
-                            modules,
-                            type_origin_table,
-                            linkage_table,
-                        }),
-                    ) => ObjectData::Package(MovePackage {
-                        id: object_id,
-                        version,
-                        modules,
-                        type_origin_table,
-                        linkage_table,
-                    }),
-                    (
-                        ObjectType::Struct(type_),
-                        ReadableObjectData::Move(ReadableMoveStruct {
-                            has_public_transfer,
-                            contents,
-                        }),
-                    ) => {
-                        // check id matches in contents
-                        // switch to if id_opt(&contents).is_none_or(|id| id != object_id) when the
-                        // API of is_none_or is stabilized as now this would fail in wasm tests
-                        #[allow(clippy::nonminimal_bool)]
-                        if !id_opt(&contents).is_some_and(|id| id == object_id) {
-                            return Err(serde::de::Error::custom("id from contents doesn't match"));
-                        }
-
-                        ObjectData::Struct(MoveStruct {
-                            type_,
-                            has_public_transfer,
-                            version,
-                            contents,
-                        })
-                    }
-                    _ => return Err(serde::de::Error::custom("type and data don't match")),
-                };
-
-                Ok(GenesisObject { data, owner })
-            } else {
-                let BinaryGenesisObject::RawObject { data, owner } =
-                    Deserialize::deserialize(deserializer)?;
-
-                Ok(GenesisObject { data, owner })
-            }
+            Ok(GenesisObject { data, owner })
         }
     }
 
     #[cfg(test)]
     mod test {
+        use crate::bcs::FromBcs;
+        use crate::bcs::ToBcs;
         use crate::object::Object;
 
         #[cfg(target_arch = "wasm32")]
@@ -873,7 +702,7 @@ mod serialization {
 
         #[test]
         fn object_fixture() {
-            const MySo_COIN: &[u8] = &[
+            const SUI_COIN: &[u8] = &[
                 0, 1, 1, 32, 79, 43, 0, 0, 0, 0, 0, 40, 35, 95, 175, 213, 151, 87, 206, 190, 35,
                 131, 79, 35, 254, 22, 15, 181, 40, 108, 28, 77, 68, 229, 107, 254, 191, 160, 196,
                 186, 42, 2, 122, 53, 52, 133, 199, 58, 0, 0, 0, 0, 0, 79, 255, 208, 0, 85, 34, 190,
@@ -883,7 +712,7 @@ mod serialization {
                 141, 20, 15, 85, 96, 19, 15, 0, 0, 0, 0, 0,
             ];
 
-            const MySo_STAKE: &[u8] = &[
+            const SUI_STAKE: &[u8] = &[
                 0, 2, 1, 154, 1, 52, 5, 0, 0, 0, 0, 80, 3, 112, 71, 231, 166, 234, 205, 164, 99,
                 237, 29, 56, 97, 170, 21, 96, 105, 158, 227, 122, 22, 251, 60, 162, 12, 97, 151,
                 218, 71, 253, 231, 239, 116, 138, 12, 233, 128, 195, 128, 77, 33, 38, 122, 77, 53,
@@ -973,7 +802,7 @@ mod serialization {
                 13, 89, 18, 159, 205, 129, 112, 131, 112, 192, 126, 0, 0, 0, 0, 0,
             ];
 
-            for fixture in [MySo_COIN, MySo_STAKE, NFT, FUD_COIN, BULLSHARK_PACKAGE] {
+            for fixture in [SUI_COIN, SUI_STAKE, NFT, FUD_COIN, BULLSHARK_PACKAGE] {
                 let object: Object = bcs::from_bytes(fixture).unwrap();
                 assert_eq!(bcs::to_bytes(&object).unwrap(), fixture);
 
@@ -981,6 +810,24 @@ mod serialization {
                 println!("{json}");
                 assert_eq!(object, serde_json::from_str(&json).unwrap());
             }
+        }
+
+        // Test to ensure we properly serialize and deserialize the new MoveStructType variants for
+        // address balances
+        #[test]
+        fn address_balance_objects() {
+            let non_mys_address_balance_type = "AAUHIRSU0QWQjjOQW/wFv4O24+PddAa8JQ45YwhB+i7EfzgGY29pbl9hBkNPSU5fQQAAEAAAAAAAAABQCSgWThHEQ1NqPKQQsXVKd/yFD0FSDYUtrvXx1xt+jIk0Bsyk3bbd4hLE1MDxwok6jzp0k3365HVXhJgmi+4vjcQJAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACswgmPj1SN1ZkPLtiVtVs0XD3QCgS/YYUFBh9Q6p4b+zoJAAAAAAAAAAAA==";
+
+            let non_sui = Object::from_bcs_base64(non_mys_address_balance_type).unwrap();
+            assert_eq!(
+                non_sui.to_bcs_base64().unwrap(),
+                non_mys_address_balance_type
+            );
+
+            let mys_address_balance_type = "AAQAAgAAAAAAAABQlJ321C1hKFc15SQmGZUdTDrwVh7xQ46GoV2zEnFK88b/JOPl1wGyhHd/R1itnNXhAzGoyXuDHuOL3V34auvxf+gDAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACswgjRbaObiwu6bn07xewfd3V9iFJfbhcaWy7K6YgNsZdKkAAAAAAAAAAA==";
+
+            let mys = Object::from_bcs_base64(mys_address_balance_type).unwrap();
+            assert_eq!(mys.to_bcs_base64().unwrap(), mys_address_balance_type);
         }
     }
 }

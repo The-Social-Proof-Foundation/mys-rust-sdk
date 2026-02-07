@@ -8,8 +8,29 @@ use super::Secp256r1PublicKey;
 use super::Secp256r1Signature;
 use super::ZkLoginAuthenticator;
 
+/// A basic signature
+///
+/// This enumeration defines the set of simple or basic signature schemes supported by MySocial. Most
+/// signature schemes supported by MySo end up comprising of a at least one simple signature scheme.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// simple-signature-bcs = bytes ; where the contents of the bytes are defined by <simple-signature>
+/// simple-signature = (ed25519-flag ed25519-signature ed25519-public-key) /
+///                    (secp256k1-flag secp256k1-signature secp256k1-public-key) /
+///                    (secp256r1-flag secp256r1-signature secp256r1-public-key)
+/// ```
+///
+/// Note: Due to historical reasons, signatures are serialized slightly different from the majority
+/// of the types in MySocial. In particular if a signature is ever embedded in another structure it
+/// generally is serialized as `bytes` meaning it has a length prefix that defines the length of
+/// the completely serialized signature.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
+#[non_exhaustive]
 pub enum SimpleSignature {
     Ed25519 {
         signature: Ed25519Signature,
@@ -26,6 +47,7 @@ pub enum SimpleSignature {
 }
 
 impl SimpleSignature {
+    /// Return the flag for this signature scheme
     pub fn scheme(&self) -> SignatureScheme {
         match self {
             SimpleSignature::Ed25519 { .. } => SignatureScheme::Ed25519,
@@ -77,7 +99,7 @@ impl SimpleSignature {
         let flag = SignatureScheme::from_byte(
             *bytes
                 .first()
-                .ok_or_else(|| serde::de::Error::custom("missing signature scheme falg"))?,
+                .ok_or_else(|| serde::de::Error::custom("missing signature scheme flag"))?,
         )
         .map_err(serde::de::Error::custom)?;
         match flag {
@@ -291,8 +313,26 @@ impl<'de> serde::Deserialize<'de> for SimpleSignature {
     }
 }
 
+/// Flag use to disambiguate the signature schemes supported by MySocial.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// signature-scheme = ed25519-flag / secp256k1-flag / secp256r1-flag /
+///                    multisig-flag / bls-flag / zklogin-flag / passkey-flag
+/// ed25519-flag     = %x00
+/// secp256k1-flag   = %x01
+/// secp256r1-flag   = %x02
+/// multisig-flag    = %x03
+/// bls-flag         = %x04
+/// zklogin-flag     = %x05
+/// passkey-flag     = %x06
+/// ```
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
+#[non_exhaustive]
 #[repr(u8)]
 pub enum SignatureScheme {
     Ed25519 = 0x00,
@@ -305,6 +345,7 @@ pub enum SignatureScheme {
 }
 
 impl SignatureScheme {
+    /// Return the name of this signature scheme
     pub fn name(self) -> &'static str {
         match self {
             SignatureScheme::Ed25519 => "ed25519",
@@ -317,6 +358,7 @@ impl SignatureScheme {
         }
     }
 
+    /// Try constructing from a byte flag
     pub fn from_byte(flag: u8) -> Result<Self, InvalidSignatureScheme> {
         match flag {
             0x00 => Ok(Self::Ed25519),
@@ -330,36 +372,42 @@ impl SignatureScheme {
         }
     }
 
+    /// Convert to a byte flag
     pub fn to_u8(self) -> u8 {
         self as u8
     }
 }
 
 impl Ed25519PublicKey {
+    /// Return the flag for this signature scheme
     pub fn scheme(&self) -> SignatureScheme {
         SignatureScheme::Ed25519
     }
 }
 
 impl Secp256k1PublicKey {
+    /// Return the flag for this signature scheme
     pub fn scheme(&self) -> SignatureScheme {
         SignatureScheme::Secp256k1
     }
 }
 
 impl Secp256r1PublicKey {
+    /// Return the flag for this signature scheme
     pub fn scheme(&self) -> SignatureScheme {
         SignatureScheme::Secp256r1
     }
 }
 
 impl super::ZkLoginPublicIdentifier {
+    /// Return the flag for this signature scheme
     pub fn scheme(&self) -> SignatureScheme {
         SignatureScheme::ZkLogin
     }
 }
 
 impl super::PasskeyPublicKey {
+    /// Return the flag for this signature scheme
     pub fn scheme(&self) -> SignatureScheme {
         SignatureScheme::Passkey
     }
@@ -374,8 +422,27 @@ impl std::fmt::Display for InvalidSignatureScheme {
     }
 }
 
+/// A signature from a user
+///
+/// A `UserSignature` is most commonly used to authorize the execution and inclusion of a
+/// transaction to the blockchain.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// user-signature-bcs = bytes ; where the contents of the bytes are defined by <user-signature>
+/// user-signature = simple-signature / multisig / multisig-legacy / zklogin / passkey
+/// ```
+///
+/// Note: Due to historical reasons, signatures are serialized slightly different from the majority
+/// of the types in MySocial. In particular if a signature is ever embedded in another structure it
+/// generally is serialized as `bytes` meaning it has a length prefix that defines the length of
+/// the completely serialized signature.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
+#[non_exhaustive]
 pub enum UserSignature {
     Simple(SimpleSignature),
     Multisig(MultisigAggregatedSignature),
@@ -384,6 +451,7 @@ pub enum UserSignature {
 }
 
 impl UserSignature {
+    /// Return the flag for this signature scheme
     pub fn scheme(&self) -> SignatureScheme {
         match self {
             UserSignature::Simple(simple) => simple.scheme(),
@@ -421,7 +489,7 @@ mod serialization {
             let flag = SignatureScheme::from_byte(
                 *bytes
                     .first()
-                    .ok_or_else(|| serde::de::Error::custom("missing signature scheme falg"))?,
+                    .ok_or_else(|| serde::de::Error::custom("missing signature scheme flag"))?,
             )
             .map_err(serde::de::Error::custom)?;
             match flag {
@@ -555,33 +623,46 @@ mod serialization {
             D: serde::Deserializer<'de>,
         {
             if deserializer.is_human_readable() {
-                let readable = ReadableUserSignature::deserialize(deserializer)?;
-                Ok(match readable {
-                    ReadableUserSignature::Ed25519 {
-                        signature,
-                        public_key,
-                    } => Self::Simple(SimpleSignature::Ed25519 {
-                        signature,
-                        public_key,
+                // Try to deserialize as either a plain base64 string OR the tagged enum format
+                #[derive(serde_derive::Deserialize)]
+                #[serde(untagged)]
+                enum UserSignatureHelper {
+                    Base64String(String),
+                    Tagged(ReadableUserSignature),
+                }
+
+                let helper = UserSignatureHelper::deserialize(deserializer)?;
+                match helper {
+                    UserSignatureHelper::Base64String(s) => {
+                        UserSignature::from_base64(&s).map_err(serde::de::Error::custom)
+                    }
+                    UserSignatureHelper::Tagged(readable) => Ok(match readable {
+                        ReadableUserSignature::Ed25519 {
+                            signature,
+                            public_key,
+                        } => Self::Simple(SimpleSignature::Ed25519 {
+                            signature,
+                            public_key,
+                        }),
+                        ReadableUserSignature::Secp256k1 {
+                            signature,
+                            public_key,
+                        } => Self::Simple(SimpleSignature::Secp256k1 {
+                            signature,
+                            public_key,
+                        }),
+                        ReadableUserSignature::Secp256r1 {
+                            signature,
+                            public_key,
+                        } => Self::Simple(SimpleSignature::Secp256r1 {
+                            signature,
+                            public_key,
+                        }),
+                        ReadableUserSignature::Multisig(multisig) => Self::Multisig(multisig),
+                        ReadableUserSignature::ZkLogin(zklogin) => Self::ZkLogin(zklogin),
+                        ReadableUserSignature::Passkey(passkey) => Self::Passkey(passkey),
                     }),
-                    ReadableUserSignature::Secp256k1 {
-                        signature,
-                        public_key,
-                    } => Self::Simple(SimpleSignature::Secp256k1 {
-                        signature,
-                        public_key,
-                    }),
-                    ReadableUserSignature::Secp256r1 {
-                        signature,
-                        public_key,
-                    } => Self::Simple(SimpleSignature::Secp256r1 {
-                        signature,
-                        public_key,
-                    }),
-                    ReadableUserSignature::Multisig(multisig) => Self::Multisig(multisig),
-                    ReadableUserSignature::ZkLogin(zklogin) => Self::ZkLogin(zklogin),
-                    ReadableUserSignature::Passkey(passkey) => Self::Passkey(passkey),
-                })
+                }
             } else {
                 use serde_with::DeserializeAs;
 
@@ -609,10 +690,19 @@ mod serialization {
 
         #[test]
         fn simple_fixtures() {
-            const FIXTURES: &[(SignatureScheme, &str)]  = &[
-                (SignatureScheme::Ed25519, "YQDaeO4w2ULMy5eqHBzP0oalr1YhDX/9uJS9MntKnW3d55q4aqZYYnoEloaBmXKc6FoD5bTwONdwS9CwdMQGhIcPDX2rNYyNrapO+gBJp1sHQ2VVsQo2ghm7aA9wVxNJ13U="),
-                (SignatureScheme::Secp256k1, "YgErcT6WUSQXGD1DaIwls5rWq648akDMlvL41ugUUhyIPWnqURl+daQLG+ILNemARKHYVNOikKJJ8jqu+HzlRa5rAg4XzVk55GsZZkGWjNdZkQuiV34n+nP944dtub7FvOsr"),
-                (SignatureScheme::Secp256r1, "YgLp1p4K9dSQTt2AeR05yK1MkXmtLm6Sieb9yfkpW1gOBiqnO9ZKZiWUrLJQav2Mxw64zM37g3IVdsB/To6qfl8IA0f7ryPwOKvEwwiicRF6Kkz/rt28X/gcdRe8bHSn7bQw"),
+            const FIXTURES: &[(SignatureScheme, &str)] = &[
+                (
+                    SignatureScheme::Ed25519,
+                    "YQDaeO4w2ULMy5eqHBzP0oalr1YhDX/9uJS9MntKnW3d55q4aqZYYnoEloaBmXKc6FoD5bTwONdwS9CwdMQGhIcPDX2rNYyNrapO+gBJp1sHQ2VVsQo2ghm7aA9wVxNJ13U=",
+                ),
+                (
+                    SignatureScheme::Secp256k1,
+                    "YgErcT6WUSQXGD1DaIwls5rWq648akDMlvL41ugUUhyIPWnqURl+daQLG+ILNemARKHYVNOikKJJ8jqu+HzlRa5rAg4XzVk55GsZZkGWjNdZkQuiV34n+nP944dtub7FvOsr",
+                ),
+                (
+                    SignatureScheme::Secp256r1,
+                    "YgLp1p4K9dSQTt2AeR05yK1MkXmtLm6Sieb9yfkpW1gOBiqnO9ZKZiWUrLJQav2Mxw64zM37g3IVdsB/To6qfl8IA0f7ryPwOKvEwwiicRF6Kkz/rt28X/gcdRe8bHSn7bQw",
+                ),
             ];
 
             for (scheme, fixture) in FIXTURES {
@@ -687,7 +777,7 @@ mod serialization {
 
         #[test]
         fn zklogin_fixtures() {
-            const FIXTURES: &[&str]  = &[
+            const FIXTURES: &[&str] = &[
                 "mAcFA00yMTM0MzA3MTg2NDQ3ODc4NTU1OTU1OTY2Njg3NDQ3Njg0MzYyODQxNjA4OTQ4ODEyMTk4MjQ0OTY0ODk4OTg3OTkxMTI1MTY2OTA2N0w1MzYyMzAzOTQxMzk3NzQ1MTk2MTQxNjgxNjA5MDk0MDI4MTg3NzgxMzY2ODc3ODA5NTA2NTU0NzA3MjQ4MzcwNzM4OTcwOTI5MzYwATEDAk0xOTAzMjkyNDMyMDAxODEyNjcyNzEyMDYzMjYzMzM2OTE1NTg2MDc4NDA0NjY2MDcyMzIzMjU0MTAwMjQyODAxODA4ODQ4MTI3MzA5N0sxOTM0MDEzODQwOTcyNjc5OTM0MzgxMTI2ODg3OTQ2MTk1NDk5NTczMjY3NTE5ODAxNDA4MzQ2MzA3NDA2NzI3NjIxNzI0MTA4ODUCTDQxMTc0OTU3NjIwNzc2NjE4OTk2Njk5ODU1MTUzMzc2MDcwMTkzNTgwMjc2MjUxNTc4MDQwMTc0NTI2OTM1MTY5ODY1MDU1NDcyMTdNMTI3MDM0MzkzNTYyNTQ3NTM4NDA5NzAxMjA3MDAxMjM5MjcxOTU1OTI4OTE0MDgxMzY5NzQ0ODkwMzkzMzgyOTgzODYwODQxODYyNzYCATEBMANMNjAyNTg2MDg4MjI2OTUxNTE2NDY3MjY1NjU3OTU4MDE1OTMyMTI2ODY4MDM1NjU0NTkxOTA1NDkwNzkzNTM4MzY1NDYwNzA5MTIyOE0xNTUxNzY4ODA2NDc3NTgzMDI3NzAwNjY2NzE2OTM2NzAxNjU4Nzk5NDIyNjc1MTQ0Nzg5ODMzNjg0MDk5NjU4MDczNzg0NDY0NDExNQExMXdpYVhOeklqb2lhSFIwY0hNNkx5OXBaQzUwZDJsMFkyZ3VkSFl2YjJGMWRHZ3lJaXcCMmV5SmhiR2NpT2lKU1V6STFOaUlzSW5SNWNDSTZJa3BYVkNJc0ltdHBaQ0k2SWpFaWZRTDIwMjIzNjc3MTc2ODYwNzEyNzk5MTIwNjA0MTY1NTc3MDEyMjMyOTk3NTc0MjQwNjg2MDUwMzc1OTc1MTI1NzUzNDA0NDU0MTY4MTAKAAAAAAAAAGICUv1c+GW7/G0rKAO5QgQrqs3ujZALi4GWTkqgEjfTqMs53H1MeeRJdWzJW104/97F1VJyjm01ozKRasbRJGSsRwKi14vTFJZpnOkPlaKtNt4cGpY4PpaoeXb289IzLDx1Gg==",
                 "mwcFA00xMDE2MjI2MTYwOTg0NDYxNDI1OTY3MjA3OTg1MTYyNzUxNTQyNjEzMzM1OTEzMTc5NDQ3ODc4MDgzNDA3NTkxNDc5ODcxNzMzNzUzNU0xNjUwMTEzNTg2OTk2NDUwMDk1Njk2MDE2NzI0NzgwMzY3MzkyNDI4NDI0NTU3MDIyODMyODc4MDYxNjE4NzE0MzY2MzgzNzA0MjMyNAExAwJMNjAyMjIxMDk3ODA0MDA5MTgyMjQ1MDM2NjM2NjkyMzE1Mjg2NDAzMDQzNjY2ODg5NTUzNzYwNTM5MTM4MDA3OTAxMzIzMjE5OTk2NU0xNjEwNjE0MDY4NzEwMDc3MzQyNDIyNTI0NjEyNzM3ODIyNTgwOTIxMTQxMTYwMjQzMTIwMzI3NDM2MjM1NjEwOTI5NDk5Mjg2MjM4NgJMNzQwNDE3NTg3NDgyOTU3NDM0NTk1NDk1MTU0NDkxODY2ODI5ODQ0OTYxNjMzMDAyMzE4MzE4MzcwMTgxNjEwOTg3OTAwOTY5MTcxMUw3MzAwNzMwODk0MDQzNjM0NjI0NzIwNzkzNDIxNTM1NTUxODI3NDU4NjE4NzU5NjE2OTEzMjU0ODY4MzUzODE1MzM5ODg3MjIzMTA5AgExATADTTExNDA2NTA2NzUyNTkyODQ5NDk4MzcyNzYxODIyNzM4MjA2NTY0ODc4ODM3NTE3NzkxNTY2MzQ3NDk0NDkyNDQyMTI4MDExMTQwMzU3TTE1Njk5MzYzODA5ODg4MDc3MDcxNjM1NTg1MTA2NzA2MjE0NTcxMDI3NDU3ODE5MTE4NTE1NTk2MjA4MDgzODUzODcyOTM3NzQxNDczATExd2lhWE56SWpvaWFIUjBjSE02THk5cFpDNTBkMmwwWTJndWRIWXZiMkYxZEdneUlpdwIyZXlKaGJHY2lPaUpTVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0lzSW10cFpDSTZJakVpZlFNMTc1NzI2MTY4NDgyNzU4OTMzODIyMTc0ODE3OTM5MTkwMDYzNjYzNzY4NTk4MTcwNDA1NDYwNDk4MzU5NTgxODc0NjEyOTg2NjkyNzAKAAAAAAAAAGICl9lwjktCQkH7GqGGV6EdbjHv4Go6MIDmr6EIvtg/2h5IuXKJF5GoVLuykxWwkSdNr9iRUZaz3Z0p/Z9nPJlW/gNaiwdVCMdfShJHSZgqfSH4DZpfaJPkGp6VX+TIIeDevg==",
                 "mgcFA00xOTUwNDI1NDE5MzgxMzM3OTA5NDA1MzkyODkyNTQwMjAxMjIxMTg4ODY5MDAzOTQ3ODM0MjYzOTk4OTcwMjA4MjAxNjY2MDkyNzg4MU0xODEwMjYxODU0NjY0NjY3MDgyMjI5MjczMjIwMDgzMzU0OTk4NDAxMTkxMDI1MDY2MjQ4Mjk5MjMzODgzNjA1NTc1MzMyNTUyMTUzMwExAwJMNTI0MzA1OTQ2MTI1NDQxOTM0NzgzOTMxMjI4ODQ5NjY4OTI0Njk4NzIyMTMyMDcxMDcyNzc2NzgzNzc3NDc4ODI4Mzc1NjgzMTAyOE0xMjA3MDIwMzk2MzAzNjY0NTY2NjAyMzUwNDMyNDM3NDY1OTYwMTY1NzY2NDAzOTU4MzE0MDU2Njc2MDExOTcwMTA3MjI5MjA0NzkxMQJNMTYzNjc2NDUxMTMxNzA1OTkxMTgwNzc1NjgxOTUyMjA5ODY1NjcxNjE0ODk2MDcyNDI1NzQ2ODg5ODQ0NzI4NTk0MzE2Mzk4MzQxNzhMNTg5MTQ4MzY3MjI1MTQyMzgzODE5NTQxNDg0NjEwNTY0Nzk4MDE2NjAyODIyNjcwMzE2ODE1Njg2MzkzNjUxNjk1OTkzMjE4MzExNQIBMQEwA0w2NDc2MTA0MzAwODgxNTQ2NTk3NjUwODk0NjEzNTUyMDc1NDg4Mjk5NjA4NjM5MTY4MzE3MjgzNTg2ODI3MDA3MTUzODg5MjI1MTI2TDQ3NjgzNjQxMTE1NjM0NzI0MDI1NzA4NDE0ODEyMDMzMTgzMDQzMTQ1MDQ4NjcxMzk1NzQ0MzAzODI2NzA4MDcwMTkwNDgxMTQyNzEBMTF3aWFYTnpJam9pYUhSMGNITTZMeTlwWkM1MGQybDBZMmd1ZEhZdmIyRjFkR2d5SWl3AjJleUpoYkdjaU9pSlNVekkxTmlJc0luUjVjQ0k2SWtwWFZDSXNJbXRwWkNJNklqRWlmUU0xMDc0MzE4MDg0MjY5ODE2Mzk0ODQ5NzAyMjkwMDE0Mzc4NjI0MTEwOTYyMzMyMDgzNzYxNzUzMDY5NzUxNDA1MzIwODA1NjEwNzgzNAoAAAAAAAAAYgLL7Jn3QV4USqVbuv97w4LqA12BAwU95fsUrvymgAUPtiepsG6kCVnX903PFZBusNM07tgWJ4/5ypb5mbJQhijJA+3BG7HM6kM2jZ0NPldx4AR5zvu+l4ZXRC4lo39h/K5s",
@@ -711,8 +801,8 @@ mod serialization {
 
         #[test]
         fn passkey_fixtures() {
-            const FIXTURES: &[&str]  = &[
-                "lgIGJUmWDeWIDoxodDQXD2R2YFuP5K65ooYyx5lc87qDHZdjHQAAAACKAXsidHlwZSI6IndlYmF1dGhuLmdldCIsImNoYWxsZW5nZSI6IkFBQUF0X21qMySoxdmJWcFlNNldWNllfb2l4Nko4YU5fOXNiOFNLRmJ1a0JmaVF3Iiwib3JpZ2luIjoiaHR0cDovL2xvY2FsaG9zdDo1MTczIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfWICmOyQv1fJ+inKD0C/sxKtxyFKl9aoBign6p9Ih3iA2ahDVg2CPZqUOlEhur2S2GbIZjbn6TbgWtbXXg8SjLkL7wM9Fw4JO0AKLdnLC1nhQguHBX5K6Hv2ta1sqoOqEFDDEw==",
+            const FIXTURES: &[&str] = &[
+                "lgIGJUmWDeWIDoxodDQXD2R2YFuP5K65ooYyx5lc87qDHZdjHQAAAACKAXsidHlwZSI6IndlYmF1dGhuLmdldCIsImNoYWxsZW5nZSI6IkFBQUF0X21qSUIxdmJWcFlNNldWNllfb2l4Nko4YU5fOXNiOFNLRmJ1a0JmaVF3Iiwib3JpZ2luIjoiaHR0cDovL2xvY2FsaG9zdDo1MTczIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfWICmOyQv1fJ+inKD0C/sxKtxyFKl9aoBign6p9Ih3iA2ahDVg2CPZqUOlEhur2S2GbIZjbn6TbgWtbXXg8SjLkL7wM9Fw4JO0AKLdnLC1nhQguHBX5K6Hv2ta1sqoOqEFDDEw==",
             ];
 
             for fixture in FIXTURES {
@@ -727,6 +817,53 @@ mod serialization {
                 println!("{json}");
                 assert_eq!(sig, serde_json::from_str(&json).unwrap());
             }
+        }
+
+        #[test]
+        fn mutisig_with_passkey() {
+            const FIXTURE: &str = "4wMDAQSPAgYlWA5npzp6kvrYZs+ZuUq2Z1mil2S1cYIfq64uix17NuQdAAAAAIMBeyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoieEtoSGhUU1o4TVJTNjAtLTZNbjBreC1vSW1RWUs1RjNFMmtzQm9iRkk3OCIsIm9yaWdpbiI6Imh0dHBzOi8vd3d3LnN1aS5pbyIsImNyb3NzT3JpZ2luIjpmYWxzZX1iAj6cOZNgD7buVIny/mQVv0gt87gEpo/V6yFusFHc0ED0XBdBXIRO8cDcoKDOPeKpNOwyMn4JvCwh/bA9Z27vBcID4FVY2uPg1vTXoKTq74rVS0uaUzafqn5emXJEfpzp9osQAAUADX2rNYyNrapO+gBJp1sHQ2VVsQo2ghm7aA9wVxNJ13UBAQIOF81ZOeRrGWZBlozXWZELold+J/pz/eOHbbm+xbzrKwECA0f7ryPwOKvEwwiicRF6Kkz/rt28X/gcdRe8bHSn7bQwAQM8G2h0dHBzOi8vaWQudHdpdGNoLnR2L29hdXRoMgVuAvSJovCe0hhp6n7cBfcDd20d7RhhkODYMqLqqMIDAQQD4FVY2uPg1vTXoKTq74rVS0uaUzafqn5emXJEfpzp9osBAQA=";
+
+            let bcs = Base64::decode_vec(FIXTURE).unwrap();
+
+            let sig: UserSignature = bcs::from_bytes(&bcs).unwrap();
+            assert_eq!(SignatureScheme::Multisig, sig.scheme());
+
+            let committee = match &sig {
+                UserSignature::Multisig(multisig) => multisig.committee(),
+                _ => panic!("not a multisig"),
+            };
+            assert_eq!(
+                committee.derive_address(),
+                crate::Address::from_hex(
+                    "0x10f58251fa90d7fd5510f99787ac5c5874fe29c033524ba0275f1ed793ed8598"
+                )
+                .unwrap()
+            );
+
+            let bytes = bcs::to_bytes(&sig).unwrap();
+            assert_eq!(bcs, bytes);
+
+            let json = serde_json::to_string_pretty(&sig).unwrap();
+            println!("{json}");
+            assert_eq!(sig, serde_json::from_str(&json).unwrap());
+        }
+
+        #[test]
+        fn test_base64_string_deserialization() {
+            const ED25519_BASE64: &str = "ANp47jDZQszLl6ocHM/ShqWvViENf/24lL0ye0qdbd3nmrhqplhiegSWhoGZcpzoWgPltPA413BL0LB0xAaEhw8Nfas1jI2tqk76AEmnWwdDZVWxCjaCGbtoD3BXE0nXdQ==";
+            let compact_json = format!(r#""{}""#, ED25519_BASE64);
+            let sig_from_compact: UserSignature =
+                serde_json::from_str(&compact_json).expect("Should deserialize from base64 string");
+
+            #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+            struct TestCertificate {
+                signature: UserSignature,
+            }
+            let cert_compact = format!(r#"{{"signature": "{}"}}"#, ED25519_BASE64);
+            let cert: TestCertificate = serde_json::from_str(&cert_compact)
+                .expect("Should deserialize with base64 signature");
+
+            assert_eq!(cert.signature, sig_from_compact);
         }
     }
 }

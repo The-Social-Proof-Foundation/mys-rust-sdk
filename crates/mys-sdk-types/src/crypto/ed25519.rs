@@ -1,5 +1,14 @@
 //! Implementation of ed25519 public-key cryptogrophy.
 
+/// An ed25519 public key.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// ed25519-public-key = 32OCTECT
+/// ```
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(
     feature = "serde",
@@ -92,11 +101,20 @@ impl std::fmt::Display for Ed25519PublicKey {
 impl std::fmt::Debug for Ed25519PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Ed25519PublicKey")
-            .field(&format_args!("\"{}\"", self))
+            .field(&format_args!("\"{self}\""))
             .finish()
     }
 }
 
+/// An ed25519 signature.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// ed25519-signature = 64OCTECT
+/// ```
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(
     feature = "serde",
@@ -191,7 +209,7 @@ impl std::fmt::Display for Ed25519Signature {
 impl std::fmt::Debug for Ed25519Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Ed25519Signature")
-            .field(&format_args!("\"{}\"", self))
+            .field(&format_args!("\"{self}\""))
             .finish()
     }
 }

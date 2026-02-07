@@ -1,12 +1,14 @@
-use super::zklogin::ZkLoginAuthenticator;
-use super::zklogin::ZkLoginPublicIdentifier;
 use super::Ed25519PublicKey;
 use super::Ed25519Signature;
+use super::PasskeyAuthenticator;
+use super::PasskeyPublicKey;
 use super::Secp256k1PublicKey;
 use super::Secp256k1Signature;
 use super::Secp256r1PublicKey;
 use super::Secp256r1Signature;
 use super::SignatureScheme;
+use super::zklogin::ZkLoginAuthenticator;
+use super::zklogin::ZkLoginPublicIdentifier;
 
 pub type WeightUnit = u8;
 pub type ThresholdUnit = u16;
@@ -16,15 +18,62 @@ const MAX_COMMITTEE_SIZE: usize = 10;
 // TODO validate sigs
 // const MAX_BITMAP_VALUE: BitmapUnit = 0b1111111111;
 
+/// Enum of valid public keys for multisig committee members
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// multisig-member-public-key = ed25519-multisig-member-public-key /
+///                              secp256k1-multisig-member-public-key /
+///                              secp256r1-multisig-member-public-key /
+///                              zklogin-multisig-member-public-key
+///
+/// ed25519-multisig-member-public-key   = %x00 ed25519-public-key
+/// secp256k1-multisig-member-public-key = %x01 secp256k1-public-key
+/// secp256r1-multisig-member-public-key = %x02 secp256r1-public-key
+/// zklogin-multisig-member-public-key   = %x03 zklogin-public-identifier
+/// ```
+///
+/// There is also a legacy encoding for this type defined as:
+///
+/// ```text
+/// legacy-multisig-member-public-key = string ; which is valid base64 encoded
+///                                            ; and the decoded bytes are defined
+///                                            ; by legacy-public-key
+/// legacy-public-key = (ed25519-flag ed25519-public-key) /
+///                     (secp256k1-flag secp256k1-public-key) /
+///                     (secp256r1-flag secp256r1-public-key)
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
+#[non_exhaustive]
 pub enum MultisigMemberPublicKey {
     Ed25519(Ed25519PublicKey),
     Secp256k1(Secp256k1PublicKey),
     Secp256r1(Secp256r1PublicKey),
     ZkLogin(ZkLoginPublicIdentifier),
+    Passkey(PasskeyPublicKey),
 }
 
+/// A member in a multisig committee
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// multisig-member = multisig-member-public-key
+///                   u8    ; weight
+/// ```
+///
+/// There is also a legacy encoding for this type defined as:
+///
+/// ```text
+/// legacy-multisig-member = legacy-multisig-member-public-key
+///                          u8     ; weight
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(
     feature = "serde",
@@ -37,19 +86,43 @@ pub struct MultisigMember {
 }
 
 impl MultisigMember {
+    /// Construct a new member from a `MultisigMemberPublicKey` and a `weight`.
     pub fn new(public_key: MultisigMemberPublicKey, weight: WeightUnit) -> Self {
         Self { public_key, weight }
     }
 
+    /// This member's public key.
     pub fn public_key(&self) -> &MultisigMemberPublicKey {
         &self.public_key
     }
 
+    /// Weight of this member's signature.
     pub fn weight(&self) -> WeightUnit {
         self.weight
     }
 }
 
+/// A multisig committee
+///
+/// A `MultisigCommittee` is a set of members who collectively control a single `Address` on the
+/// MySo blockchain. The number of required signautres to authorize the execution of a transaction
+/// is determined by `(signature_0_weight + signature_1_weight ..) >= threshold`.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// multisig-committee = (vector multisig-member)
+///                      u16    ; threshold
+/// ```
+///
+/// There is also a legacy encoding for this type defined as:
+///
+/// ```text
+/// legacy-multisig-committee = (vector legacy-multisig-member)
+///                             u16     ; threshold
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(
     feature = "serde",
@@ -60,23 +133,33 @@ pub struct MultisigCommittee {
     /// A list of committee members and their corresponding weight.
     #[cfg_attr(feature = "proptest", any(proptest::collection::size_range(0..=10).lift()))]
     members: Vec<MultisigMember>,
-    /// If the total weight of the public keys corresponding to verified signatures is larger than threshold, the Multisig is verified.
+
+    /// If the total weight of the public keys corresponding to verified signatures is larger than
+    /// threshold, the Multisig is verified.
     threshold: ThresholdUnit,
 }
 
 impl MultisigCommittee {
+    /// Construct a new committee from a list of `MultisigMember`s and a `threshold`.
+    ///
+    /// Note that the order of the members is significant towards deriving the `Address` governed
+    /// by this committee.
     pub fn new(members: Vec<MultisigMember>, threshold: ThresholdUnit) -> Self {
         Self { members, threshold }
     }
 
+    /// The members of the committee
     pub fn members(&self) -> &[MultisigMember] {
         &self.members
     }
 
+    /// The total signature weight required to authorize a transaction for the address
+    /// corresponding to this `MultisigCommittee`.
     pub fn threshold(&self) -> ThresholdUnit {
         self.threshold
     }
 
+    /// Return the flag for this signature scheme
     pub fn scheme(&self) -> SignatureScheme {
         SignatureScheme::Multisig
     }
@@ -110,7 +193,31 @@ impl MultisigCommittee {
     }
 }
 
-/// The struct that contains signatures and public keys necessary for authenticating a Multisig.
+/// Aggregated signature from members of a multisig committee.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// multisig-aggregated-signature = (vector multisig-member-signature)
+///                                 u16     ; bitmap
+///                                 multisig-committee
+/// ```
+///
+/// There is also a legacy encoding for this type defined as:
+///
+/// ```text
+/// legacy-multisig-aggregated-signature = (vector multisig-member-signature)
+///                                        roaring-bitmap   ; bitmap
+///                                        legacy-multisig-committee
+/// roaring-bitmap = bytes  ; where the contents of the bytes are valid
+///                         ; according to the serialized spec for
+///                         ; roaring bitmaps
+/// ```
+///
+/// See [here](https://github.com/RoaringBitmap/RoaringFormatSpec) for the specification for the
+/// serialized format of RoaringBitmaps.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct MultisigAggregatedSignature {
@@ -119,17 +226,25 @@ pub struct MultisigAggregatedSignature {
     /// The signatures must be in the same order as they are listed in the committee.
     #[cfg_attr(feature = "proptest", any(proptest::collection::size_range(0..=10).lift()))]
     signatures: Vec<MultisigMemberSignature>,
-    /// A bitmap that indicates the position of which public key the signature should be authenticated with.
+    /// A bitmap that indicates the position of which public key the signature should be
+    /// authenticated with.
     bitmap: BitmapUnit,
     /// Legacy encoding for the bitmap.
     //TODO implement a strategy for legacy bitmap
     #[cfg_attr(feature = "proptest", strategy(proptest::strategy::Just(None)))]
-    legacy_bitmap: Option<roaring::RoaringBitmap>,
-    /// The public key encoded with each public key with its signature scheme used along with the corresponding weight.
+    legacy_bitmap: Option<crate::Bitmap>,
+    /// The public key encoded with each public key with its signature scheme used along with the
+    /// corresponding weight.
     committee: MultisigCommittee,
 }
 
 impl MultisigAggregatedSignature {
+    /// Construct a new aggregated multisig signature.
+    ///
+    /// Since the list of signatures doesn't contain sufficient information to identify which
+    /// committee member provided the signature, it is up to the caller to ensure that the provided
+    /// signature list is in the same order as it's corresponding member in the provided committee
+    /// and that it's position in the provided bitmap is set.
     pub fn new(
         committee: MultisigCommittee,
         signatures: Vec<MultisigMemberSignature>,
@@ -143,22 +258,27 @@ impl MultisigAggregatedSignature {
         }
     }
 
+    /// The list of signatures from committee members
     pub fn signatures(&self) -> &[MultisigMemberSignature] {
         &self.signatures
     }
 
+    /// The bitmap that indicates which committee members provided their signature.
     pub fn bitmap(&self) -> BitmapUnit {
         self.bitmap
     }
 
-    pub fn legacy_bitmap(&self) -> Option<&roaring::RoaringBitmap> {
+    /// The legacy roaring bitmap, if this is a legacy formatted signature
+    pub fn legacy_bitmap(&self) -> Option<&crate::Bitmap> {
         self.legacy_bitmap.as_ref()
     }
 
-    pub fn with_legacy_bitmap(&mut self, legacy_bitmap: roaring::RoaringBitmap) {
+    /// Configure with a legacy roaring bitmap
+    pub fn with_legacy_bitmap(&mut self, legacy_bitmap: crate::Bitmap) {
         self.legacy_bitmap = Some(legacy_bitmap);
     }
 
+    /// The committee for this aggregated signature
     pub fn committee(&self) -> &MultisigCommittee {
         &self.committee
     }
@@ -177,7 +297,7 @@ impl Eq for MultisigAggregatedSignature {}
 
 /// Convert a roaring bitmap to plain bitmap.
 #[cfg(feature = "serde")]
-fn roaring_bitmap_to_u16(roaring: &roaring::RoaringBitmap) -> Result<BitmapUnit, &'static str> {
+fn roaring_bitmap_to_u16(roaring: &crate::Bitmap) -> Result<BitmapUnit, &'static str> {
     let mut val = 0;
     for i in roaring.iter() {
         if i >= MAX_COMMITTEE_SIZE as u32 {
@@ -188,25 +308,45 @@ fn roaring_bitmap_to_u16(roaring: &roaring::RoaringBitmap) -> Result<BitmapUnit,
     Ok(val)
 }
 
+/// A signature from a member of a multisig committee.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// multisig-member-signature = ed25519-multisig-member-signature /
+///                             secp256k1-multisig-member-signature /
+///                             secp256r1-multisig-member-signature /
+///                             zklogin-multisig-member-signature
+///
+/// ed25519-multisig-member-signature   = %x00 ed25519-signature
+/// secp256k1-multisig-member-signature = %x01 secp256k1-signature
+/// secp256r1-multisig-member-signature = %x02 secp256r1-signature
+/// zklogin-multisig-member-signature   = %x03 zklogin-authenticator
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
+#[non_exhaustive]
 pub enum MultisigMemberSignature {
     Ed25519(Ed25519Signature),
     Secp256k1(Secp256k1Signature),
     Secp256r1(Secp256r1Signature),
     ZkLogin(Box<ZkLoginAuthenticator>),
+    Passkey(PasskeyAuthenticator),
 }
 
 #[cfg(feature = "serde")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "serde")))]
 mod serialization {
     use super::*;
-    use crate::crypto::Base64Array33;
-    use crate::crypto::Base64Array34;
     use crate::Ed25519PublicKey;
+    use crate::PasskeyPublicKey;
     use crate::Secp256k1PublicKey;
     use crate::Secp256r1PublicKey;
     use crate::SignatureScheme;
+    use crate::crypto::Base64Array33;
+    use crate::crypto::Base64Array34;
     use base64ct::Base64;
     use base64ct::Encoding;
     use serde::Deserialize;
@@ -250,6 +390,9 @@ mod serialization {
                 MultisigMemberPublicKey::ZkLogin(_) => Err(serde::ser::Error::custom(
                     "zklogin not supported in legacy multisig",
                 )),
+                MultisigMemberPublicKey::Passkey(_) => Err(serde::ser::Error::custom(
+                    "passkey not supported in legacy multisig",
+                )),
             }
         }
     }
@@ -264,7 +407,7 @@ mod serialization {
             let flag = SignatureScheme::from_byte(
                 *bytes
                     .first()
-                    .ok_or_else(|| serde::de::Error::custom("missing signature scheme falg"))?,
+                    .ok_or_else(|| serde::de::Error::custom("missing signature scheme flag"))?,
             )
             .map_err(serde::de::Error::custom)?;
             let public_key_bytes = &bytes[1..];
@@ -355,16 +498,14 @@ mod serialization {
     #[derive(serde_derive::Deserialize)]
     pub struct LegacyMultisig {
         signatures: Vec<MultisigMemberSignature>,
-        #[serde(with = "::serde_with::As::<crate::_serde::BinaryRoaringBitmap>")]
-        bitmap: roaring::RoaringBitmap,
+        bitmap: crate::Bitmap,
         committee: LegacyMultisigCommittee,
     }
 
     #[derive(serde_derive::Serialize)]
     pub struct LegacyMultisigRef<'a> {
         signatures: &'a [MultisigMemberSignature],
-        #[serde(with = "::serde_with::As::<crate::_serde::BinaryRoaringBitmap>")]
-        bitmap: &'a roaring::RoaringBitmap,
+        bitmap: &'a crate::Bitmap,
         committee: LegacyMultisigCommitteeRef<'a>,
     }
 
@@ -386,9 +527,7 @@ mod serialization {
     struct ReadableMultisigAggregatedSignature {
         signatures: Vec<MultisigMemberSignature>,
         bitmap: BitmapUnit,
-        #[serde(default)]
-        #[serde(with = "::serde_with::As::<Option<crate::_serde::Base64RoaringBitmap>>")]
-        legacy_bitmap: Option<roaring::RoaringBitmap>,
+        legacy_bitmap: Option<crate::Bitmap>,
         committee: MultisigCommittee,
     }
 
@@ -397,8 +536,7 @@ mod serialization {
         signatures: &'a [MultisigMemberSignature],
         bitmap: BitmapUnit,
         #[serde(skip_serializing_if = "Option::is_none")]
-        #[serde(with = "::serde_with::As::<Option<crate::_serde::Base64RoaringBitmap>>")]
-        legacy_bitmap: &'a Option<roaring::RoaringBitmap>,
+        legacy_bitmap: &'a Option<crate::Bitmap>,
         committee: &'a MultisigCommittee,
     }
 
@@ -476,7 +614,7 @@ mod serialization {
             let flag = SignatureScheme::from_byte(
                 *bytes
                     .first()
-                    .ok_or_else(|| serde::de::Error::custom("missing signature scheme falg"))?,
+                    .ok_or_else(|| serde::de::Error::custom("missing signature scheme flag"))?,
             )
             .map_err(serde::de::Error::custom)?;
             if flag != SignatureScheme::Multisig {
@@ -519,6 +657,7 @@ mod serialization {
         Secp256k1(Secp256k1PublicKey),
         Secp256r1(Secp256r1PublicKey),
         ZkLogin(ZkLoginPublicIdentifier),
+        Passkey(PasskeyPublicKey),
     }
 
     #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
@@ -529,6 +668,7 @@ mod serialization {
         Secp256k1 { public_key: Secp256k1PublicKey },
         Secp256r1 { public_key: Secp256r1PublicKey },
         ZkLogin(ZkLoginPublicIdentifier),
+        Passkey { public_key: PasskeyPublicKey },
     }
 
     impl Serialize for MultisigMemberPublicKey {
@@ -556,6 +696,11 @@ mod serialization {
                     MultisigMemberPublicKey::ZkLogin(public_id) => {
                         ReadableMemberPublicKey::ZkLogin(public_id.clone())
                     }
+                    MultisigMemberPublicKey::Passkey(public_key) => {
+                        ReadableMemberPublicKey::Passkey {
+                            public_key: *public_key,
+                        }
+                    }
                 };
                 readable.serialize(serializer)
             } else {
@@ -571,6 +716,9 @@ mod serialization {
                     }
                     MultisigMemberPublicKey::ZkLogin(public_id) => {
                         MemberPublicKey::ZkLogin(public_id.clone())
+                    }
+                    MultisigMemberPublicKey::Passkey(public_key) => {
+                        MemberPublicKey::Passkey(*public_key)
                     }
                 };
                 binary.serialize(serializer)
@@ -594,6 +742,7 @@ mod serialization {
                         Self::Secp256r1(public_key)
                     }
                     ReadableMemberPublicKey::ZkLogin(public_id) => Self::ZkLogin(public_id),
+                    ReadableMemberPublicKey::Passkey { public_key } => Self::Passkey(public_key),
                 })
             } else {
                 let binary = MemberPublicKey::deserialize(deserializer)?;
@@ -602,6 +751,7 @@ mod serialization {
                     MemberPublicKey::Secp256k1(public_key) => Self::Secp256k1(public_key),
                     MemberPublicKey::Secp256r1(public_key) => Self::Secp256r1(public_key),
                     MemberPublicKey::ZkLogin(public_id) => Self::ZkLogin(public_id),
+                    MemberPublicKey::Passkey(public_key) => Self::Passkey(public_key),
                 })
             }
         }
@@ -613,6 +763,7 @@ mod serialization {
         Secp256k1(Secp256k1Signature),
         Secp256r1(Secp256r1Signature),
         ZkLogin(Box<ZkLoginAuthenticator>),
+        Passkey(PasskeyAuthenticator),
     }
 
     #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
@@ -623,6 +774,7 @@ mod serialization {
         Secp256k1 { signature: Secp256k1Signature },
         Secp256r1 { signature: Secp256r1Signature },
         ZkLogin(Box<ZkLoginAuthenticator>),
+        Passkey(PasskeyAuthenticator),
     }
 
     impl Serialize for MultisigMemberSignature {
@@ -650,6 +802,9 @@ mod serialization {
                     MultisigMemberSignature::ZkLogin(authenticator) => {
                         ReadableMemberSignature::ZkLogin(authenticator.clone())
                     }
+                    MultisigMemberSignature::Passkey(authenticator) => {
+                        ReadableMemberSignature::Passkey(authenticator.clone())
+                    }
                 };
                 readable.serialize(serializer)
             } else {
@@ -665,6 +820,9 @@ mod serialization {
                     }
                     MultisigMemberSignature::ZkLogin(authenticator) => {
                         MemberSignature::ZkLogin(authenticator.clone())
+                    }
+                    MultisigMemberSignature::Passkey(authenticator) => {
+                        MemberSignature::Passkey(authenticator.clone())
                     }
                 };
                 binary.serialize(serializer)
@@ -684,6 +842,7 @@ mod serialization {
                     ReadableMemberSignature::Secp256k1 { signature } => Self::Secp256k1(signature),
                     ReadableMemberSignature::Secp256r1 { signature } => Self::Secp256r1(signature),
                     ReadableMemberSignature::ZkLogin(authenticator) => Self::ZkLogin(authenticator),
+                    ReadableMemberSignature::Passkey(authenticator) => Self::Passkey(authenticator),
                 })
             } else {
                 let binary = MemberSignature::deserialize(deserializer)?;
@@ -692,6 +851,7 @@ mod serialization {
                     MemberSignature::Secp256k1(signature) => Self::Secp256k1(signature),
                     MemberSignature::Secp256r1(signature) => Self::Secp256r1(signature),
                     MemberSignature::ZkLogin(authenticator) => Self::ZkLogin(authenticator),
+                    MemberSignature::Passkey(authenticator) => Self::Passkey(authenticator),
                 })
             }
         }

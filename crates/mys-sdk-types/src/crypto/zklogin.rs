@@ -2,42 +2,367 @@ use super::SimpleSignature;
 use crate::checkpoint::EpochId;
 use crate::u256::U256;
 
-/// An zk login authenticator with all the necessary fields.
+/// A zklogin authenticator
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// zklogin-bcs = bytes             ; contents are defined by <zklogin-authenticator>
+/// zklogin     = zklogin-flag
+///               zklogin-inputs
+///               u64               ; max epoch
+///               simple-signature    
+/// ```
+///
+/// Note: Due to historical reasons, signatures are serialized slightly different from the majority
+/// of the types in MySocial. In particular if a signature is ever embedded in another structure it
+/// generally is serialized as `bytes` meaning it has a length prefix that defines the length of
+/// the completely serialized signature.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct ZkLoginAuthenticator {
+    /// Zklogin proof and inputs required to perform proof verification.
     pub inputs: ZkLoginInputs,
+
+    /// Maximum epoch for which the proof is valid.
     pub max_epoch: EpochId,
+
+    /// User signature with the pubkey attested to by the provided proof.
     pub signature: SimpleSignature,
 }
 
-/// All inputs required for the zk login proof verification and other public inputs.
+/// A zklogin groth16 proof and the required inputs to perform proof verification.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// zklogin-inputs = zklogin-proof
+///                  zklogin-claim
+///                  string              ; base64url-unpadded encoded JwtHeader
+///                  bn254-field-element ; address_seed
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(
-    feature = "serde",
-    derive(serde_derive::Serialize, serde_derive::Deserialize)
-)]
-#[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct ZkLoginInputs {
-    pub proof_points: ZkLoginProof,
-    pub iss_base64_details: Claim,
-    pub header_base64: String,
-    pub address_seed: Bn254FieldElement,
+    proof_points: ZkLoginProof,
+    iss_base64_details: ZkLoginClaim,
+    header_base64: String,
+
+    jwt_header: JwtHeader,
+    jwk_id: JwkId,
+    public_identifier: ZkLoginPublicIdentifier,
 }
 
-/// A claim consists of value and index_mod_4.
+impl ZkLoginInputs {
+    #[cfg(feature = "serde")]
+    #[cfg_attr(doc_cfg, doc(cfg(feature = "serde")))]
+    pub fn new(
+        proof_points: ZkLoginProof,
+        iss_base64_details: ZkLoginClaim,
+        header_base64: String,
+        address_seed: Bn254FieldElement,
+    ) -> Result<Self, InvalidZkLoginAuthenticatorError> {
+        let iss = {
+            const ISS: &str = "iss";
+
+            let iss = iss_base64_details.verify_extended_claim(ISS)?;
+
+            if iss.len() > 255 {
+                return Err(InvalidZkLoginAuthenticatorError::new(
+                    "invalid iss: too long",
+                ));
+            }
+            iss
+        };
+
+        let jwt_header = JwtHeader::from_base64(&header_base64)?;
+        let jwk_id = JwkId {
+            iss: iss.clone(),
+            kid: jwt_header.kid.clone(),
+        };
+
+        let public_identifier = ZkLoginPublicIdentifier { iss, address_seed };
+
+        Ok(Self {
+            proof_points,
+            iss_base64_details,
+            header_base64,
+            jwt_header,
+            jwk_id,
+            public_identifier,
+        })
+    }
+
+    pub fn proof_points(&self) -> &ZkLoginProof {
+        &self.proof_points
+    }
+
+    pub fn iss_base64_details(&self) -> &ZkLoginClaim {
+        &self.iss_base64_details
+    }
+
+    pub fn header_base64(&self) -> &str {
+        &self.header_base64
+    }
+
+    pub fn address_seed(&self) -> &Bn254FieldElement {
+        &self.public_identifier.address_seed
+    }
+
+    pub fn jwk_id(&self) -> &JwkId {
+        &self.jwk_id
+    }
+
+    pub fn iss(&self) -> &str {
+        &self.public_identifier.iss
+    }
+
+    pub fn public_identifier(&self) -> &ZkLoginPublicIdentifier {
+        &self.public_identifier
+    }
+}
+
+#[cfg(feature = "proptest")]
+impl proptest::arbitrary::Arbitrary for ZkLoginInputs {
+    type Parameters = ();
+    type Strategy = proptest::strategy::BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        use proptest::prelude::*;
+
+        (any::<ZkLoginProof>(), any::<Bn254FieldElement>())
+            .prop_map(|(proof_points, address_seed)| {
+                //TODO implement Arbitrary for real for ZkLoginClaim and header_base64 values
+                let iss_base64_details = ZkLoginClaim {
+                    value: "wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw".to_owned(),
+                    index_mod_4: 2,
+                };
+                let header_base64 = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ".to_owned();
+                Self::new(
+                    proof_points,
+                    iss_base64_details,
+                    header_base64,
+                    address_seed,
+                )
+                .unwrap()
+            })
+            .boxed()
+    }
+}
+
+/// A claim of the iss in a zklogin proof
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// zklogin-claim = string u8
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(
     feature = "serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
-pub struct Claim {
+pub struct ZkLoginClaim {
     pub value: String,
     pub index_mod_4: u8,
 }
 
-/// The struct for zk login proof.
+#[derive(Debug)]
+pub struct InvalidZkLoginAuthenticatorError(String);
+
+#[cfg(feature = "serde")]
+#[cfg_attr(doc_cfg, doc(cfg(feature = "serde")))]
+impl InvalidZkLoginAuthenticatorError {
+    fn new<T: Into<String>>(err: T) -> Self {
+        Self(err.into())
+    }
+}
+
+impl std::fmt::Display for InvalidZkLoginAuthenticatorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid zklogin claim: {}", self.0)
+    }
+}
+
+impl std::error::Error for InvalidZkLoginAuthenticatorError {}
+
+#[cfg(feature = "serde")]
+#[cfg_attr(doc_cfg, doc(cfg(feature = "serde")))]
+impl ZkLoginClaim {
+    fn verify_extended_claim(
+        &self,
+        expected_key: &str,
+    ) -> Result<String, InvalidZkLoginAuthenticatorError> {
+        /// Map a base64 string to a bit array by taking each char's index and convert it to binary form with one bit per u8
+        /// element in the output. Returns InvalidZkLoginClaimError if one of the characters is not in the base64 charset.
+        fn base64_to_bitarray(input: &str) -> Result<Vec<u8>, InvalidZkLoginAuthenticatorError> {
+            use itertools::Itertools;
+
+            const BASE64_URL_CHARSET: &str =
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+            input
+                .chars()
+                .map(|c| {
+                    BASE64_URL_CHARSET
+                        .find(c)
+                        .map(|index| index as u8)
+                        .map(|index| (0..6).rev().map(move |i| (index >> i) & 1))
+                        .ok_or_else(|| {
+                            InvalidZkLoginAuthenticatorError::new("base64_to_bitarry invalid input")
+                        })
+                })
+                .flatten_ok()
+                .collect()
+        }
+
+        /// Convert a bitarray (each bit is represented by a u8) to a byte array by taking each 8 bits as a
+        /// byte in big-endian format.
+        fn bitarray_to_bytearray(bits: &[u8]) -> Result<Vec<u8>, InvalidZkLoginAuthenticatorError> {
+            #[expect(clippy::manual_is_multiple_of)]
+            if bits.len() % 8 != 0 {
+                return Err(InvalidZkLoginAuthenticatorError::new(
+                    "bitarray_to_bytearray invalid input",
+                ));
+            }
+            Ok(bits
+                .chunks(8)
+                .map(|chunk| {
+                    let mut byte = 0u8;
+                    for (i, bit) in chunk.iter().rev().enumerate() {
+                        byte |= bit << i;
+                    }
+                    byte
+                })
+                .collect())
+        }
+
+        /// Parse the base64 string, add paddings based on offset, and convert to a bytearray.
+        fn decode_base64_url(
+            s: &str,
+            index_mod_4: &u8,
+        ) -> Result<String, InvalidZkLoginAuthenticatorError> {
+            if s.len() < 2 {
+                return Err(InvalidZkLoginAuthenticatorError::new(
+                    "Base64 string smaller than 2",
+                ));
+            }
+            let mut bits = base64_to_bitarray(s)?;
+            match index_mod_4 {
+                0 => {}
+                1 => {
+                    bits.drain(..2);
+                }
+                2 => {
+                    bits.drain(..4);
+                }
+                _ => {
+                    return Err(InvalidZkLoginAuthenticatorError::new(
+                        "Invalid first_char_offset",
+                    ));
+                }
+            }
+
+            let last_char_offset = (index_mod_4 + s.len() as u8 - 1) % 4;
+            match last_char_offset {
+                3 => {}
+                2 => {
+                    bits.drain(bits.len() - 2..);
+                }
+                1 => {
+                    bits.drain(bits.len() - 4..);
+                }
+                _ => {
+                    return Err(InvalidZkLoginAuthenticatorError::new(
+                        "Invalid last_char_offset",
+                    ));
+                }
+            }
+
+            if bits.len() % 8 != 0 {
+                return Err(InvalidZkLoginAuthenticatorError::new("Invalid bits length"));
+            }
+
+            Ok(std::str::from_utf8(&bitarray_to_bytearray(&bits)?)
+                .map_err(|_| InvalidZkLoginAuthenticatorError::new("Invalid UTF8 string"))?
+                .to_owned())
+        }
+
+        let extended_claim = decode_base64_url(&self.value, &self.index_mod_4)?;
+
+        // Last character of each extracted_claim must be '}' or ','
+        if !(extended_claim.ends_with('}') || extended_claim.ends_with(',')) {
+            return Err(InvalidZkLoginAuthenticatorError::new(
+                "Invalid extended claim",
+            ));
+        }
+
+        let json_str = format!("{{{}}}", &extended_claim[..extended_claim.len() - 1]);
+
+        serde_json::from_str::<serde_json::Value>(&json_str)
+            .map_err(|e| InvalidZkLoginAuthenticatorError::new(e.to_string()))?
+            .as_object_mut()
+            .and_then(|o| o.get_mut(expected_key))
+            .map(serde_json::Value::take)
+            .and_then(|v| match v {
+                serde_json::Value::String(s) => Some(s),
+                _ => None,
+            })
+            .ok_or_else(|| InvalidZkLoginAuthenticatorError::new("invalid extended claim"))
+    }
+}
+
+/// Struct that represents a standard JWT header according to
+/// https://openid.net/specs/openid-connect-core-1_0.html
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct JwtHeader {
+    alg: String,
+    kid: String,
+    typ: Option<String>,
+}
+
+impl JwtHeader {
+    #[cfg(feature = "serde")]
+    fn from_base64(s: &str) -> Result<Self, InvalidZkLoginAuthenticatorError> {
+        use base64ct::Base64UrlUnpadded;
+        use base64ct::Encoding;
+
+        #[derive(serde_derive::Serialize, serde_derive::Deserialize)]
+        struct Header {
+            alg: String,
+            kid: String,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            typ: Option<String>,
+        }
+
+        let header_bytes = Base64UrlUnpadded::decode_vec(s)
+            .map_err(|e| InvalidZkLoginAuthenticatorError::new(format!("invalid base64: {e}")))?;
+        let Header { alg, kid, typ } = serde_json::from_slice(&header_bytes)
+            .map_err(|e| InvalidZkLoginAuthenticatorError::new(format!("invalid json: {e}")))?;
+        if alg != "RS256" {
+            return Err(InvalidZkLoginAuthenticatorError::new(
+                "jwt alg must be RS256",
+            ));
+        }
+        Ok(Self { alg, kid, typ })
+    }
+}
+
+/// A zklogin groth16 proof
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// zklogin-proof = circom-g1 circom-g2 circom-g1
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(
     feature = "serde",
@@ -50,24 +375,88 @@ pub struct ZkLoginProof {
     pub c: CircomG1,
 }
 
-/// A G1 point in BN254 serialized as a vector of three strings which is the canonical decimal
-/// representation of the projective coordinates in Fq.
+/// A G1 point
+///
+/// This represents the canonical decimal representation of the projective coordinates in Fq.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// circom-g1 = %x03 3(bn254-field-element)
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct CircomG1(pub [Bn254FieldElement; 3]);
 
-/// A G2 point in BN254 serialized as a vector of three vectors each being a vector of two strings
-/// which are the canonical decimal representation of the coefficients of the projective coordinates
-/// in Fq2.
+/// A G2 point
+///
+/// This represents the canonical decimal representation of the coefficients of the projective
+/// coordinates in Fq2.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// circom-g2 = %x03 3(%x02 2(bn254-field-element))
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct CircomG2(pub [[Bn254FieldElement; 2]; 3]);
 
-/// A wrapper struct to retrofit in [enum PublicKey] for zkLogin.
-/// Useful to construct [struct MultiSigPublicKey].
+/// Public Key equivalent for Zklogin authenticators
+///
+/// A `ZkLoginPublicIdentifier` is the equivalent of a public key for other account authenticators,
+/// and contains the information required to derive the onchain account [`Address`] for a Zklogin
+/// authenticator.
+///
+/// ## Note
+///
+/// Due to a historical bug that was introduced in the MySo Typescript SDK when the zklogin
+/// authenticator was first introduced, there are now possibly two "valid" addresses for each
+/// zklogin authenticator depending on the bit-pattern of the `address_seed` value.
+///
+/// The original bug incorrectly derived a zklogin's address by stripping any leading
+/// zero-bytes that could have been present in the 32-byte length `address_seed` value prior to
+/// hashing, leading to a different derived address. This incorrectly derived address was
+/// presented to users of various wallets, leading them to sending funds to these addresses
+/// that they couldn't access. Instead of letting these users lose any assets that were sent to
+/// these addresses, the MySo network decided to change the protocol to allow for a zklogin
+/// authenticator who's `address_seed` value had leading zero-bytes be authorized to sign for
+/// both the addresses derived from both the unpadded and padded `address_seed` value.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// zklogin-public-identifier-bcs = bytes ; where the contents are defined by
+///                                       ; <zklogin-public-identifier>
+///
+/// zklogin-public-identifier = zklogin-public-identifier-iss
+///                             address-seed
+///
+/// zklogin-public-identifier-unpadded = zklogin-public-identifier-iss
+///                                      address-seed-unpadded
+///
+/// ; The iss, or issuer, is a utf8 string that is less than 255 bytes long
+/// ; and is serialized with the iss's length in bytes as a u8 followed by
+/// ; the bytes of the iss
+/// zklogin-public-identifier-iss = u8 *255(OCTET)
+///
+/// ; A Bn254FieldElement serialized as a 32-byte big-endian value
+/// address-seed = 32(OCTET)
+///
+/// ; A Bn254FieldElement serialized as a 32-byte big-endian value
+/// ; with any leading zero bytes stripped
+/// address-seed-unpadded = %x00 / %x01-ff *31(OCTET)
+/// ```
+///
+/// [`Address`]: crate::Address
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
-//TODO ensure iss is less than 255 bytes long
 pub struct ZkLoginPublicIdentifier {
     iss: String,
     address_seed: Bn254FieldElement,
@@ -91,9 +480,19 @@ impl ZkLoginPublicIdentifier {
     }
 }
 
+/// A JSON Web Key
+///
 /// Struct that contains info for a JWK. A list of them for different kids can
 /// be retrieved from the JWK endpoint (e.g. <https://www.googleapis.com/oauth2/v3/certs>).
 /// The JWK is used to verify the JWT token.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// jwk = string string string string
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "serde",
@@ -103,15 +502,26 @@ impl ZkLoginPublicIdentifier {
 pub struct Jwk {
     /// Key type parameter, <https://datatracker.ietf.org/doc/html/rfc7517#section-4.1>
     pub kty: String,
+
     /// RSA public exponent, <https://datatracker.ietf.org/doc/html/rfc7517#section-9.3>
     pub e: String,
+
     /// RSA modulus, <https://datatracker.ietf.org/doc/html/rfc7517#section-9.3>
     pub n: String,
+
     /// Algorithm parameter, <https://datatracker.ietf.org/doc/html/rfc7517#section-4.4>
     pub alg: String,
 }
 
-/// Key to identify a JWK, consists of iss and kid.
+/// Key to uniquely identify a JWK
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// jwk-id = string string
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "serde",
@@ -119,12 +529,26 @@ pub struct Jwk {
 )]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct JwkId {
-    /// iss string that identifies the OIDC provider.
+    /// The issuer or identity of the OIDC provider.
     pub iss: String,
-    /// kid string that identifies the JWK.
+
+    /// A key id use to uniquely identify a key from an OIDC provider.
     pub kid: String,
 }
 
+/// A point on the BN254 elliptic curve.
+///
+/// This is a 32-byte, or 256-bit, value that is generally represented as radix10 when a
+/// human-readable display format is needed, and is represented as a 32-byte big-endian value while
+/// in memory.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// bn254-field-element = *DIGIT ; which is then interpreted as a radix10 encoded 32-byte value
+/// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct Bn254FieldElement([u8; 32]);
@@ -151,11 +575,7 @@ impl Bn254FieldElement {
         }
 
         // If the value is '0' then just return a slice of length 1 of the final byte
-        if buf.is_empty() {
-            &self.0[31..]
-        } else {
-            buf
-        }
+        if buf.is_empty() { &self.0[31..] } else { buf }
     }
 
     pub fn padded(&self) -> &[u8] {
@@ -297,7 +717,8 @@ mod serialization {
                 }
 
                 let Readable { iss, address_seed } = Deserialize::deserialize(deserializer)?;
-                Ok(Self { iss, address_seed })
+                Self::new(iss, address_seed)
+                    .ok_or_else(|| serde::de::Error::custom("invalid zklogin public identifier"))
             } else {
                 let bytes: Cow<'de, [u8]> = Bytes::deserialize_as(deserializer)?;
                 let iss_len = *bytes
@@ -315,10 +736,8 @@ mod serialization {
                     .map_err(serde::de::Error::custom)
                     .map(Bn254FieldElement)?;
 
-                Ok(Self {
-                    iss: iss.into(),
-                    address_seed,
-                })
+                Self::new(iss.into(), address_seed)
+                    .ok_or_else(|| serde::de::Error::custom("invalid zklogin public identifier"))
             }
         }
     }
@@ -326,7 +745,6 @@ mod serialization {
     #[derive(serde_derive::Serialize)]
     struct AuthenticatorRef<'a> {
         inputs: &'a ZkLoginInputs,
-        #[cfg_attr(feature = "serde", serde(with = "crate::_serde::ReadableDisplay"))]
         max_epoch: EpochId,
         signature: &'a SimpleSignature,
     }
@@ -334,7 +752,6 @@ mod serialization {
     #[derive(serde_derive::Deserialize)]
     struct Authenticator {
         inputs: ZkLoginInputs,
-        #[cfg_attr(feature = "serde", serde(with = "crate::_serde::ReadableDisplay"))]
         max_epoch: EpochId,
         signature: SimpleSignature,
     }
@@ -404,7 +821,7 @@ mod serialization {
             let flag = SignatureScheme::from_byte(
                 *bytes
                     .first()
-                    .ok_or_else(|| serde::de::Error::custom("missing signature scheme falg"))?,
+                    .ok_or_else(|| serde::de::Error::custom("missing signature scheme flag"))?,
             )
             .map_err(serde::de::Error::custom)?;
             if flag != SignatureScheme::ZkLogin {
@@ -422,6 +839,58 @@ mod serialization {
                 max_epoch,
                 signature,
             })
+        }
+    }
+
+    impl Serialize for ZkLoginInputs {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            #[derive(serde_derive::Serialize)]
+            struct Inputs<'a> {
+                proof_points: &'a ZkLoginProof,
+                iss_base64_details: &'a ZkLoginClaim,
+                header_base64: &'a str,
+                address_seed: &'a Bn254FieldElement,
+            }
+
+            Inputs {
+                proof_points: self.proof_points(),
+                iss_base64_details: self.iss_base64_details(),
+                header_base64: self.header_base64(),
+                address_seed: self.address_seed(),
+            }
+            .serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for ZkLoginInputs {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            #[derive(serde_derive::Deserialize)]
+            struct Inputs {
+                proof_points: ZkLoginProof,
+                iss_base64_details: ZkLoginClaim,
+                header_base64: String,
+                address_seed: Bn254FieldElement,
+            }
+
+            let Inputs {
+                proof_points,
+                iss_base64_details,
+                header_base64,
+                address_seed,
+            } = Inputs::deserialize(deserializer)?;
+            Self::new(
+                proof_points,
+                iss_base64_details,
+                header_base64,
+                address_seed,
+            )
+            .map_err(serde::de::Error::custom)
         }
     }
 

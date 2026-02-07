@@ -1,9 +1,60 @@
+/// Unique identifier for an Account on the MySo blockchain.
+///
+/// An `Address` is a 32-byte pseudonymous identifier used to uniquely identify an account and
+/// asset-ownership on the MySo blockchain. Often, human-readable addresses are encoded in
+/// hexadecimal with a `0x` prefix. For example, this is a valid MySo address:
+/// `0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331`.
+///
+/// ```
+/// use mys_sdk_types::Address;
+///
+/// let hex = "0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331";
+/// let address = Address::from_hex(hex).unwrap();
+/// println!("Address: {}", address);
+/// assert_eq!(hex, address.to_string());
+/// ```
+///
+/// # Deriving an account Address
+///
+/// Account addresses are cryptographically derived from a number of user account authenticators,
+/// the simplest of which is an [`Ed25519PublicKey`](crate::Ed25519PublicKey).
+///
+/// Deriving an address consists of the Blake2b256 hash of the sequence of bytes of its
+/// corresponding authenticator, prefixed with a domain-separator. For each authenticator, this
+/// domain-separator is the single byte-value of its [`SignatureScheme`](crate::SignatureScheme)
+/// flag. E.g. `hash(signature schema flag || authenticator bytes)`.
+///
+/// Each authenticator includes a convince method for deriving its `Address` as well as
+/// documentation for the specifics of how the derivation is done. See
+/// [`Ed25519PublicKey::derive_address`] for an example.
+///
+/// [`Ed25519PublicKey::derive_address`]: crate::Ed25519PublicKey::derive_address
+///
+/// # Usage as ObjectIds
+///
+/// `Address`es are also used as a way to uniquely identify an [`Object`]. When an `Address` is
+/// used as an object identifierit can also be referred to as an `ObjectId`. `ObjectId`s and
+/// account `Address`es share the same 32-byte addressable space but are derived leveraging
+/// different domain-separator values to ensure, cryptographically, that there won't be any
+/// overlap, e.g. there can't be a valid `Object` whose `ObjectId` is equal to that of the
+/// `Address` of a user account.
+///
+/// [`Object`]: crate::Object
+///
+/// # BCS
+///
+/// An `Address`'s BCS serialized form is defined by the following:
+///
+/// ```text
+/// address = 32OCTET
+/// ```
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(
     feature = "serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
 #[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
+#[doc(alias = "ObjectId")]
 pub struct Address(
     #[cfg_attr(
         feature = "serde",
@@ -52,29 +103,23 @@ impl Address {
         &self.0
     }
 
+    /// Decodes an address from a hex encoded string.
     pub fn from_hex<T: AsRef<[u8]>>(hex: T) -> Result<Self, AddressParseError> {
         let hex = hex.as_ref();
 
-        if !hex.starts_with(b"0x") {
-            return Err(AddressParseError);
+        hex_address_bytes(hex)
+            .map(Self)
+            .map_err(|e| AddressParseError { hex_error: Some(e) })
+    }
+
+    /// Decodes an address from a hex encoded &'static str.
+    ///
+    /// Similar to `from_hex` except any errors are unwrapped, turning them into panics.
+    pub const fn from_static(hex: &'static str) -> Self {
+        match hex_address_bytes(hex.as_bytes()) {
+            Ok(address) => Self(address),
+            Err(e) => e.const_panic(),
         }
-
-        let hex = &hex[2..];
-
-        // If the string is too short we'll need to pad with 0's
-        if hex.len() < Self::LENGTH * 2 {
-            let mut buf = [b'0'; Self::LENGTH * 2];
-            let pad_length = (Self::LENGTH * 2) - hex.len();
-
-            buf[pad_length..].copy_from_slice(hex);
-
-            <[u8; Self::LENGTH] as hex::FromHex>::from_hex(buf)
-        } else {
-            <[u8; Self::LENGTH] as hex::FromHex>::from_hex(hex)
-        }
-        .map(Self)
-        //TODO fix error to contain hex parse error
-        .map_err(|_| AddressParseError)
     }
 
     pub fn to_hex(&self) -> String {
@@ -83,7 +128,7 @@ impl Address {
 
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, AddressParseError> {
         <[u8; Self::LENGTH]>::try_from(bytes.as_ref())
-            .map_err(|_| AddressParseError)
+            .map_err(|_| AddressParseError { hex_error: None })
             .map(Self)
     }
 }
@@ -126,9 +171,21 @@ impl From<Address> for Vec<u8> {
     }
 }
 
-impl From<super::ObjectId> for Address {
-    fn from(value: super::ObjectId) -> Self {
-        Self::new(value.into_inner())
+impl From<&Address> for Vec<u8> {
+    fn from(value: &Address) -> Self {
+        value.0.to_vec()
+    }
+}
+
+impl From<Address> for String {
+    fn from(value: Address) -> Self {
+        value.to_string()
+    }
+}
+
+impl From<&Address> for String {
+    fn from(value: &Address) -> Self {
+        value.to_string()
     }
 }
 
@@ -136,7 +193,7 @@ impl std::fmt::Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "0x")?;
         for byte in &self.0 {
-            write!(f, "{:02x}", byte)?;
+            write!(f, "{byte:02x}")?;
         }
 
         Ok(())
@@ -146,7 +203,7 @@ impl std::fmt::Display for Address {
 impl std::fmt::Debug for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Address")
-            .field(&format_args!("\"{}\"", self))
+            .field(&format_args!("\"{self}\""))
             .finish()
     }
 }
@@ -180,7 +237,9 @@ impl<'de> serde_with::DeserializeAs<'de, [u8; Address::LENGTH]> for ReadableAddr
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct AddressParseError;
+pub struct AddressParseError {
+    hex_error: Option<HexDecodeError>,
+}
 
 impl std::fmt::Display for AddressParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -193,6 +252,101 @@ impl std::fmt::Display for AddressParseError {
 }
 
 impl std::error::Error for AddressParseError {}
+
+#[allow(unused)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HexDecodeError {
+    EmptyInput,
+    InputTooLong(usize),
+    InvalidHexCharacter(u8),
+}
+
+impl HexDecodeError {
+    const fn const_panic(&self) -> ! {
+        match self {
+            HexDecodeError::EmptyInput => panic!("input hex string must be non-empty"),
+            HexDecodeError::InputTooLong(_) => panic!("input hex string is too long for address"),
+            HexDecodeError::InvalidHexCharacter(_) => {
+                panic!("input hex string has wrong character")
+            }
+        }
+    }
+}
+
+/// 32-byte address from a hex byte vector, optionally `0x`-prefixed.
+const fn hex_address_bytes(bytes: &[u8]) -> Result<[u8; Address::LENGTH], HexDecodeError> {
+    if bytes.is_empty() {
+        return Err(HexDecodeError::EmptyInput);
+    }
+    let hex = remove_0x_prefix(bytes);
+    if hex.len() > 64 {
+        return Err(HexDecodeError::InputTooLong(hex.len()));
+    }
+
+    // Decode the hex input from back to front
+    let mut buffer = [0; Address::LENGTH];
+    let mut i = hex.len();
+    let mut j = buffer.len();
+    while i >= 2 {
+        let lo = HEX_DECODE_LUT[hex[i - 1] as usize];
+        let hi = HEX_DECODE_LUT[hex[i - 2] as usize];
+        if lo == NIL {
+            return Err(HexDecodeError::InvalidHexCharacter(hex[i - 1]));
+        }
+        if hi == NIL {
+            return Err(HexDecodeError::InvalidHexCharacter(hex[i - 2]));
+        }
+        buffer[j - 1] = (hi << 4) | lo;
+        i -= 2;
+        j -= 1;
+    }
+    if i == 1 {
+        let lo = HEX_DECODE_LUT[hex[0] as usize];
+        if lo == NIL {
+            return Err(HexDecodeError::InvalidHexCharacter(hex[0]));
+        }
+        buffer[j - 1] = lo;
+    }
+    Ok(buffer)
+}
+
+/// Removes initial "0x" prefix if any.
+const fn remove_0x_prefix(hex: &[u8]) -> &[u8] {
+    if let Some((two, hex2)) = hex.split_first_chunk::<2>()
+        && two[0] == b'0'
+        && two[1] == b'x'
+    {
+        return hex2;
+    }
+    hex
+}
+
+/// The lookup table of hex byte to value, used for hex decoding.
+///
+/// [`NIL`] is used for invalid values.
+const HEX_DECODE_LUT: &[u8; 256] = &make_decode_lut();
+
+/// Represents an invalid value in the [`HEX_DECODE_LUT`] table.
+const NIL: u8 = u8::MAX;
+
+const fn make_decode_lut() -> [u8; 256] {
+    let mut lut = [0; 256];
+    let mut i = 0u8;
+    loop {
+        lut[i as usize] = match i {
+            b'0'..=b'9' => i - b'0',
+            b'A'..=b'F' => i - b'A' + 10,
+            b'a'..=b'f' => i - b'a' + 10,
+            // use max value for invalid characters
+            _ => NIL,
+        };
+        if i == NIL {
+            break;
+        }
+        i += 1;
+    }
+    lut
+}
 
 #[cfg(test)]
 mod test {

@@ -21,7 +21,6 @@ impl Verifier<SimpleSignature> for SimpleVerifier {
             SimpleSignature::Ed25519 { .. } => Err(SignatureError::from_source(
                 "support for ed25519 is not enabled",
             )),
-
             #[cfg(feature = "secp256k1")]
             SimpleSignature::Secp256k1 {
                 signature,
@@ -34,7 +33,6 @@ impl Verifier<SimpleSignature> for SimpleVerifier {
             SimpleSignature::Secp256k1 { .. } => Err(SignatureError::from_source(
                 "support for secp256k1 is not enabled",
             )),
-
             #[cfg(feature = "secp256r1")]
             SimpleSignature::Secp256r1 {
                 signature,
@@ -47,6 +45,7 @@ impl Verifier<SimpleSignature> for SimpleVerifier {
             SimpleSignature::Secp256r1 { .. } => Err(SignatureError::from_source(
                 "support for secp256r1 is not enabled",
             )),
+            _ => Err(SignatureError::from_source("unknown signature scheme")),
         }
     }
 }
@@ -83,10 +82,12 @@ mod keypair {
     use mys_sdk_types::SimpleSignature;
     use mys_sdk_types::UserSignature;
 
+    #[derive(Debug, Clone)]
     pub struct SimpleKeypair {
         inner: InnerKeypair,
     }
 
+    #[derive(Debug, Clone)]
     enum InnerKeypair {
         #[cfg(feature = "ed25519")]
         Ed25519(crate::ed25519::Ed25519PrivateKey),
@@ -270,10 +271,12 @@ mod keypair {
         }
     }
 
+    #[derive(Debug, Clone, Eq, PartialEq)]
     pub struct SimpleVerifiyingKey {
         inner: InnerVerifyingKey,
     }
 
+    #[derive(Debug, Clone, Eq, PartialEq)]
     enum InnerVerifyingKey {
         #[cfg(feature = "ed25519")]
         Ed25519(crate::ed25519::Ed25519VerifyingKey),
@@ -464,19 +467,37 @@ mod keypair {
 }
 
 #[cfg(test)]
+#[cfg(test)]
 mod test {
+    #[cfg(any(
+        all(feature = "ed25519", feature = "pem"),
+        all(feature = "secp256k1", feature = "pem"),
+        all(feature = "secp256r1", feature = "pem")
+    ))]
     use super::*;
+    #[cfg(all(feature = "ed25519", feature = "pem"))]
     use crate::ed25519::Ed25519PrivateKey;
+    #[cfg(all(feature = "ed25519", feature = "pem"))]
     use crate::ed25519::Ed25519VerifyingKey;
+    #[cfg(feature = "secp256k1")]
     use crate::secp256k1::Secp256k1PrivateKey;
+    #[cfg(feature = "secp256k1")]
     use crate::secp256k1::Secp256k1VerifyingKey;
+    #[cfg(feature = "secp256r1")]
     use crate::secp256r1::Secp256r1PrivateKey;
+    #[cfg(feature = "secp256r1")]
     use crate::secp256r1::Secp256r1VerifyingKey;
+    #[cfg(any(
+        all(feature = "ed25519", feature = "pem"),
+        all(feature = "secp256k1", feature = "pem"),
+        all(feature = "secp256r1", feature = "pem")
+    ))]
     use test_strategy::proptest;
 
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
+    #[cfg(all(feature = "ed25519", feature = "pem"))]
     #[proptest]
     fn ed25519_pem_der(signer: Ed25519PrivateKey) {
         //
@@ -493,10 +514,16 @@ mod test {
         assert_eq!(from_pem.public_key(), public_key);
 
         // der and pem bytes don't convert to secp256r1 or secp256k1
-        Secp256r1PrivateKey::from_der(&ed25519_der).unwrap_err();
-        Secp256r1PrivateKey::from_pem(&ed25519_pem).unwrap_err();
-        Secp256k1PrivateKey::from_der(&ed25519_der).unwrap_err();
-        Secp256k1PrivateKey::from_pem(&ed25519_pem).unwrap_err();
+        #[cfg(feature = "secp256r1")]
+        {
+            Secp256r1PrivateKey::from_der(&ed25519_der).unwrap_err();
+            Secp256r1PrivateKey::from_pem(&ed25519_pem).unwrap_err();
+        }
+        #[cfg(feature = "secp256k1")]
+        {
+            Secp256k1PrivateKey::from_der(&ed25519_der).unwrap_err();
+            Secp256k1PrivateKey::from_pem(&ed25519_pem).unwrap_err();
+        }
 
         // SimpleKeypair parses
         let keypair_from_der = SimpleKeypair::from_der(&ed25519_der).unwrap();
@@ -518,10 +545,16 @@ mod test {
         assert_eq!(from_pem.public_key(), public_key);
 
         // der and pem bytes don't convert to secp256r1 or secp256k1
-        Secp256r1VerifyingKey::from_der(&der).unwrap_err();
-        Secp256r1VerifyingKey::from_pem(&pem).unwrap_err();
-        Secp256k1VerifyingKey::from_der(&der).unwrap_err();
-        Secp256k1VerifyingKey::from_pem(&pem).unwrap_err();
+        #[cfg(feature = "secp256r1")]
+        {
+            Secp256r1VerifyingKey::from_der(&der).unwrap_err();
+            Secp256r1VerifyingKey::from_pem(&pem).unwrap_err();
+        }
+        #[cfg(feature = "secp256k1")]
+        {
+            Secp256k1VerifyingKey::from_der(&der).unwrap_err();
+            Secp256k1VerifyingKey::from_pem(&pem).unwrap_err();
+        }
 
         // SimpleKeypair parses
         let from_der = SimpleVerifiyingKey::from_der(&der).unwrap();
@@ -530,6 +563,7 @@ mod test {
         assert_eq!(pem, from_pem.to_pem().unwrap());
     }
 
+    #[cfg(all(feature = "secp256r1", feature = "pem"))]
     #[proptest]
     fn secp256r1_pem_der(signer: Secp256r1PrivateKey) {
         //
@@ -546,10 +580,16 @@ mod test {
         assert_eq!(from_pem.public_key(), public_key);
 
         // der and pem bytes don't convert to ed25519 or secp256k1
-        Ed25519PrivateKey::from_der(&secp256r1_der).unwrap_err();
-        Ed25519PrivateKey::from_pem(&secp256r1_pem).unwrap_err();
-        Secp256k1PrivateKey::from_der(&secp256r1_der).unwrap_err();
-        Secp256k1PrivateKey::from_pem(&secp256r1_pem).unwrap_err();
+        #[cfg(feature = "ed25519")]
+        {
+            Ed25519PrivateKey::from_der(&secp256r1_der).unwrap_err();
+            Ed25519PrivateKey::from_pem(&secp256r1_pem).unwrap_err();
+        }
+        #[cfg(feature = "secp256k1")]
+        {
+            Secp256k1PrivateKey::from_der(&secp256r1_der).unwrap_err();
+            Secp256k1PrivateKey::from_pem(&secp256r1_pem).unwrap_err();
+        }
 
         // SimpleKeypair parses
         let keypair_from_der = SimpleKeypair::from_der(&secp256r1_der).unwrap();
@@ -571,10 +611,16 @@ mod test {
         assert_eq!(from_pem.public_key(), public_key);
 
         // der and pem bytes don't convert to ed25519 or secp256k1
-        Ed25519VerifyingKey::from_der(&der).unwrap_err();
-        Ed25519VerifyingKey::from_pem(&pem).unwrap_err();
-        Secp256k1VerifyingKey::from_der(&der).unwrap_err();
-        Secp256k1VerifyingKey::from_pem(&pem).unwrap_err();
+        #[cfg(feature = "ed25519")]
+        {
+            Ed25519VerifyingKey::from_der(&der).unwrap_err();
+            Ed25519VerifyingKey::from_pem(&pem).unwrap_err();
+        }
+        #[cfg(feature = "secp256k1")]
+        {
+            Secp256k1VerifyingKey::from_der(&der).unwrap_err();
+            Secp256k1VerifyingKey::from_pem(&pem).unwrap_err();
+        }
 
         // SimpleKeypair parses
         let from_der = SimpleVerifiyingKey::from_der(&der).unwrap();
@@ -583,6 +629,7 @@ mod test {
         assert_eq!(pem, from_pem.to_pem().unwrap());
     }
 
+    #[cfg(all(feature = "secp256k1", feature = "pem"))]
     #[proptest]
     fn secp256k1_pem_der(signer: Secp256k1PrivateKey) {
         //
@@ -599,10 +646,16 @@ mod test {
         assert_eq!(from_pem.public_key(), public_key);
 
         // der and pem bytes don't convert to secp256r1 or ed25519
-        Ed25519PrivateKey::from_der(&secp256k1_der).unwrap_err();
-        Ed25519PrivateKey::from_pem(&secp256k1_pem).unwrap_err();
-        Secp256r1PrivateKey::from_der(&secp256k1_der).unwrap_err();
-        Secp256r1PrivateKey::from_pem(&secp256k1_pem).unwrap_err();
+        #[cfg(feature = "ed25519")]
+        {
+            Ed25519PrivateKey::from_der(&secp256k1_der).unwrap_err();
+            Ed25519PrivateKey::from_pem(&secp256k1_pem).unwrap_err();
+        }
+        #[cfg(feature = "secp256r1")]
+        {
+            Secp256r1PrivateKey::from_der(&secp256k1_der).unwrap_err();
+            Secp256r1PrivateKey::from_pem(&secp256k1_pem).unwrap_err();
+        }
 
         // SimpleKeypair parses
         let keypair_from_der = SimpleKeypair::from_der(&secp256k1_der).unwrap();
@@ -624,10 +677,16 @@ mod test {
         assert_eq!(from_pem.public_key(), public_key);
 
         // der and pem bytes don't convert to ed25519 or secp256r1
-        Ed25519VerifyingKey::from_der(&der).unwrap_err();
-        Ed25519VerifyingKey::from_pem(&pem).unwrap_err();
-        Secp256r1VerifyingKey::from_der(&der).unwrap_err();
-        Secp256r1VerifyingKey::from_pem(&pem).unwrap_err();
+        #[cfg(feature = "ed25519")]
+        {
+            Ed25519VerifyingKey::from_der(&der).unwrap_err();
+            Ed25519VerifyingKey::from_pem(&pem).unwrap_err();
+        }
+        #[cfg(feature = "secp256r1")]
+        {
+            Secp256r1VerifyingKey::from_der(&der).unwrap_err();
+            Secp256r1VerifyingKey::from_pem(&pem).unwrap_err();
+        }
 
         // SimpleKeypair parses
         let from_der = SimpleVerifiyingKey::from_der(&der).unwrap();

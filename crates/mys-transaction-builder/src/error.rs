@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
+// Copyright (c) The Social Proof Foundation, LLC.
 // SPDX-License-Identifier: Apache-2.0
 
-use base64ct::Error as Base64Error;
-use mys_types::ObjectId;
+use mys_sdk_types::Address;
 
 #[derive(thiserror::Error, Debug, Clone)]
 #[non_exhaustive]
@@ -11,14 +11,12 @@ pub enum Error {
     Input(String),
     #[error("Gas object should be an immutable or owned object")]
     WrongGasObject,
-    #[error("Decoding error: {0}")]
-    Decoding(#[from] Base64Error),
     #[error("Missing object id")]
     MissingObjectId,
     #[error("Missing version for object {0}")]
-    MissingVersion(ObjectId),
+    MissingVersion(Address),
     #[error("Missing digest for object {0}")]
-    MissingDigest(ObjectId),
+    MissingDigest(Address),
     #[error("Missing sender")]
     MissingSender,
     #[error("Missing gas objects")]
@@ -28,13 +26,7 @@ pub enum Error {
     #[error("Missing gas price")]
     MissingGasPrice,
     #[error("Missing object kind for object {0}")]
-    MissingObjectKind(ObjectId),
-    #[error("Missing initial shared version for object {0}")]
-    MissingInitialSharedVersion(ObjectId),
-    #[error("Missing pure value")]
-    MissingPureValue,
+    MissingObjectKind(Address),
     #[error("Unknown shared object mutability for object {0}")]
-    SharedObjectMutability(ObjectId),
-    #[error("Unsupported literal")]
-    UnsupportedLiteral,
+    SharedObjectMutability(Address),
 }

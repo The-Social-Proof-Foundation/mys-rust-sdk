@@ -1,5 +1,14 @@
 //! Implementation of secp256k1 public-key cryptogrophy.
 
+/// A secp256k1 public key.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// secp256k1-public-key = 33OCTECT
+/// ```
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(
     feature = "serde",
@@ -94,11 +103,20 @@ impl std::fmt::Display for Secp256k1PublicKey {
 impl std::fmt::Debug for Secp256k1PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Secp256k1PublicKey")
-            .field(&format_args!("\"{}\"", self))
+            .field(&format_args!("\"{self}\""))
             .finish()
     }
 }
 
+/// A secp256k1 signature.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// secp256k1-signature = 64OCTECT
+/// ```
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(
     feature = "serde",
@@ -193,7 +211,7 @@ impl std::fmt::Display for Secp256k1Signature {
 impl std::fmt::Debug for Secp256k1Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Secp256k1Signature")
-            .field(&format_args!("\"{}\"", self))
+            .field(&format_args!("\"{self}\""))
             .finish()
     }
 }

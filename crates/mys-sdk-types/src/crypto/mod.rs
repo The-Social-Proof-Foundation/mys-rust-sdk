@@ -38,10 +38,11 @@ pub use validator::ValidatorSignature;
 pub use zklogin::Bn254FieldElement;
 pub use zklogin::CircomG1;
 pub use zklogin::CircomG2;
-pub use zklogin::Claim;
+pub use zklogin::InvalidZkLoginAuthenticatorError;
 pub use zklogin::Jwk;
 pub use zklogin::JwkId;
 pub use zklogin::ZkLoginAuthenticator;
+pub use zklogin::ZkLoginClaim;
 pub use zklogin::ZkLoginInputs;
 pub use zklogin::ZkLoginProof;
 pub use zklogin::ZkLoginPublicIdentifier;
@@ -50,10 +51,10 @@ pub use zklogin::ZkLoginPublicIdentifier;
 // Implement various base64 fixed-size array helpers
 //
 
-/// Utility for calculating base64 encoding lenghths.
+/// Utility for calculating base64 encoding lengths.
 ///
 /// In the Base64 encoding each character is used to represent 6 bits (log2(64) = 6). This means
-/// that 4 characters are used to represnet 4*6 = 24 bits = 3 bytes. So you need 4*(`n`/3)
+/// that 4 characters are used to represent 4*6 = 24 bits = 3 bytes. So you need 4*(`n`/3)
 /// characters in order to represent `n` bytes, and this needs to be rounded up to a multiple of 4.
 /// The number of unused padding characters resulting from the rounding will be 0, 1, 2, or 3.
 const fn base64_encoded_length(len: usize) -> usize {

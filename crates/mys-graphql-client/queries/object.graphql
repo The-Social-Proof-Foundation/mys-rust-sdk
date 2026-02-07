@@ -1,6 +1,0 @@
-query ObjectQuery($address: MySocialAddress!, $version: UInt53) {
-  object(address: $address, version: $version) {
-    bcs
-  }
-}
-

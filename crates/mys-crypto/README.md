@@ -5,4 +5,4 @@
 [![Documentation (master)](https://img.shields.io/badge/docs-master-59f)](https://mystenlabs.github.io/mys-rust-sdk/mys_crypto/)
 
 The `mys-crypto` crate provides the interface for signing and verifying
-transactions and messages in the MySocial ecosystem.
+transactions and messages in the MySo ecosystem.

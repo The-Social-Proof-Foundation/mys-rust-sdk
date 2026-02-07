@@ -10,6 +10,7 @@ use mys_sdk_types::SignatureScheme;
 use mys_sdk_types::SimpleSignature;
 use mys_sdk_types::UserSignature;
 
+#[derive(Clone)]
 pub struct Secp256k1PrivateKey(SigningKey);
 
 impl std::fmt::Debug for Secp256k1PrivateKey {
@@ -135,7 +136,7 @@ impl Signer<UserSignature> for Secp256k1PrivateKey {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Secp256k1VerifyingKey(VerifyingKey);
 
 impl Secp256k1VerifyingKey {
@@ -269,8 +270,8 @@ impl Verifier<UserSignature> for Secp256k1Verifier {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::MySocialSigner;
-    use crate::MySocialVerifier;
+    use crate::SuiSigner;
+    use crate::SuiVerifier;
     use mys_sdk_types::PersonalMessage;
     use test_strategy::proptest;
 

@@ -1,59 +1,66 @@
 # Set the default target of this Makefile
 .PHONY: all
-all:: ci
+all:: ci ## Default target, runs the CI process
 
 .PHONY: check-features
-check-features:
-	$(MAKE) -C crates/mso-sdk-types check-features
-	$(MAKE) -C crates/mso-crypto check-features
+check-features: ## Check feature flags for crates
+	$(MAKE) -C crates/mys-sdk-types check-features
+	$(MAKE) -C crates/mys-crypto check-features
+	$(MAKE) -C crates/mys-transaction-builder check-features
 
 .PHONY: check-fmt
-check-fmt:
-	cargo fmt -- --config imports_granularity=Item --check
+check-fmt: ## Check code formatting
+	cargo fmt -- --config imports_granularity=Item --config format_code_in_doc_comments=true --check
 
 .PHONY: fmt
-fmt:
-	cargo fmt -- --config imports_granularity=Item
+fmt: ## Format code
+	cargo fmt -- --config imports_granularity=Item --config format_code_in_doc_comments=true
 
 .PHONY: clippy
-clippy:
+clippy: ## Run Clippy linter
 	cargo clippy --all-features --all-targets
 
 .PHONY: test
-test:
-	cargo nextest run --all-features -p mso-sdk-types -p mso-crypto
-	cargo test --doc
-
-package_%.json: crates/mso-transaction-builder/tests/%/Move.toml crates/mso-transaction-builder/tests/%/sources/*.move
-	cd crates/mso-transaction-builder/tests/$(*F) && mso move build --ignore-chain --dump-bytecode-as-base64 > ../../$@
-
-.PHONY: test-with-localnet
-test-with-localnet: package_test_example_v1.json package_test_example_v2.json
-	cargo nextest run -p mso-graphql-client -p mso-transaction-builder
+test: ## Run unit tests
+	cargo nextest run --all-features
+	cargo test --all-features --doc
 
 .PHONY: wasm
-wasm:
-	$(MAKE) -C crates/mso-sdk-types wasm
-	$(MAKE) -C crates/mso-crypto wasm
+wasm: ## Build WASM modules
+	$(MAKE) -C crates/mys-sdk-types wasm
+	$(MAKE) -C crates/mys-crypto wasm
 
 .PHONY: doc
-doc:
-	RUSTDOCFLAGS="--cfg=doc_cfg -Zunstable-options --generate-link-to-definition" RUSTC_BOOTSTRAP=1 cargo doc --all-features --no-deps
+doc: ## Generate documentation
+	RUSTDOCFLAGS="-Dwarnings --cfg=doc_cfg -Zunstable-options --generate-link-to-definition" RUSTC_BOOTSTRAP=1 cargo doc --all-features --no-deps
 
 .PHONY: doc-open
-doc-open:
+doc-open: ## Generate and open documentation
 	RUSTDOCFLAGS="--cfg=doc_cfg -Zunstable-options --generate-link-to-definition" RUSTC_BOOTSTRAP=1 cargo doc --all-features --no-deps --open
 
+.PHONY: proto
+proto: ## run protobuf codegen
+	$(MAKE) -C crates/mys-rpc proto
+
+.PHONY: is-dirty
+is-dirty: ## Checks if repository is dirty
+	@(test -z "$$(git diff)" || (git diff && false)) && (test -z "$$(git status --porcelain)" || (git status --porcelain && false))
+
 .PHONY: ci
-ci: check-features check-fmt test wasm
+ci: check-features check-fmt test wasm ## Run the full CI process
 
 .PHONY: ci-full
-ci-full: ci doc
+ci-full: ci doc ## Run the full CI process and generate documentation
 
 .PHONY: clean
-clean:
+clean: ## Clean build artifacts
 	cargo clean
 
 .PHONY: clean-all
-clean-all: clean
-	git clean -dX
+clean-all: clean ## Clean all generated files, including those ignored by Git. Force removal.
+	git clean -dXf
+
+.PHONY: help
+help: ## Show this help
+	@echo "Available targets:"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)

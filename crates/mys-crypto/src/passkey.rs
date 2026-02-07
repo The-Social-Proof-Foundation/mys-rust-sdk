@@ -1,5 +1,5 @@
-use crate::secp256r1::Secp256r1VerifyingKey;
 use crate::SignatureError;
+use crate::secp256r1::Secp256r1VerifyingKey;
 use signature::Verifier;
 use mys_sdk_types::PasskeyAuthenticator;
 use mys_sdk_types::SimpleSignature;
@@ -64,7 +64,7 @@ impl Verifier<UserSignature> for PasskeyVerifier {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::MySocialVerifier;
+    use crate::SuiVerifier;
     use mys_sdk_types::Transaction;
 
     #[cfg(target_arch = "wasm32")]

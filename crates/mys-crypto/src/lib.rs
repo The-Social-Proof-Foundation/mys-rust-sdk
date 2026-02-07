@@ -8,12 +8,13 @@ pub use signature::Error as SignatureError;
 pub use signature::Signer;
 pub use signature::Verifier;
 
+#[cfg(feature = "bls12381")]
+#[cfg_attr(doc_cfg, doc(cfg(feature = "bls12381")))]
+pub mod bls12381;
+
 #[cfg(feature = "ed25519")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "ed25519")))]
 pub mod ed25519;
-
-#[allow(unused)]
-mod bls12381;
 
 #[cfg(feature = "secp256k1")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "secp256k1")))]
@@ -83,15 +84,15 @@ pub mod multisig;
 #[doc(inline)]
 pub use multisig::UserSignatureVerifier;
 
-/// Interface for signing user transactions and messages in MySocial
+/// Interface for signing user transactions and messages in Mys
 ///
 /// # Note
 ///
-/// There is a blanket implementation of `MySocialSigner` for all `T` where `T:
+/// There is a blanket implementation of `SuiSigner` for all `T` where `T:
 /// `[`Signer`]`<`[`UserSignature`]`>` so it is generally recommended for a signer to implement
 /// `Signer<UserSignature>` and rely on the blanket implementation which handles the proper
 /// construction of the signing message.
-pub trait MySocialSigner {
+pub trait SuiSigner {
     fn sign_transaction(&self, transaction: &Transaction) -> Result<UserSignature, SignatureError>;
     fn sign_personal_message(
         &self,
@@ -99,7 +100,7 @@ pub trait MySocialSigner {
     ) -> Result<UserSignature, SignatureError>;
 }
 
-impl<T: Signer<UserSignature>> MySocialSigner for T {
+impl<T: Signer<UserSignature>> SuiSigner for T {
     fn sign_transaction(&self, transaction: &Transaction) -> Result<UserSignature, SignatureError> {
         let msg = transaction.signing_digest();
         self.try_sign(&msg)
@@ -114,15 +115,15 @@ impl<T: Signer<UserSignature>> MySocialSigner for T {
     }
 }
 
-/// Interface for verifying user transactions and messages in MySocial
+/// Interface for verifying user transactions and messages in Mys
 ///
 /// # Note
 ///
-/// There is a blanket implementation of `MySocialVerifier` for all `T` where `T:
+/// There is a blanket implementation of `SuiVerifier` for all `T` where `T:
 /// `[`Verifier`]`<`[`UserSignature`]`>` so it is generally recommended for a signer to implement
 /// `Verifier<UserSignature>` and rely on the blanket implementation which handles the proper
 /// construction of the signing message.
-pub trait MySocialVerifier {
+pub trait SuiVerifier {
     fn verify_transaction(
         &self,
         transaction: &Transaction,
@@ -135,7 +136,7 @@ pub trait MySocialVerifier {
     ) -> Result<(), SignatureError>;
 }
 
-impl<T: Verifier<UserSignature>> MySocialVerifier for T {
+impl<T: Verifier<UserSignature>> SuiVerifier for T {
     fn verify_transaction(
         &self,
         transaction: &Transaction,

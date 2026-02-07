@@ -1,8 +1,9 @@
 use signature::Signer;
 use mys_sdk_types::PersonalMessage;
+use mys_sdk_types::ZkLoginInputs;
 
+use crate::SuiVerifier;
 use crate::ed25519::Ed25519PrivateKey;
-use crate::MySocialVerifier;
 
 use super::*;
 

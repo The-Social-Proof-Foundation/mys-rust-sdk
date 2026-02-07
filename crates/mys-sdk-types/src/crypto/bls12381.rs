@@ -1,5 +1,18 @@
 //! Implementation of bls12381 min-sig public-key cryptogrophy.
 
+/// A bls12381 min-sig public key.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// bls-public-key = %x60 96OCTECT
+/// ```
+///
+/// Due to historical reasons, even though a min-sig `Bls12381PublicKey` has a fixed-length of 96,
+/// Mys's binary representation of a min-sig `Bls12381PublicKey` is prefixed with its length
+/// meaning its serialized binary form (in bcs) is 97 bytes long vs a more compact 96 bytes.
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(
     feature = "serde",
@@ -10,7 +23,7 @@ pub struct Bls12381PublicKey(
     #[cfg_attr(
         feature = "serde",
         serde(
-            with = "::serde_with::As::<::serde_with::IfIsHumanReadable<super::Base64Array96, [::serde_with::Same; 96]>>"
+            with = "::serde_with::As::<::serde_with::IfIsHumanReadable<super::Base64Array96, ::serde_with::Bytes>>"
         )
     )]
     [u8; Self::LENGTH],
@@ -94,11 +107,20 @@ impl std::fmt::Display for Bls12381PublicKey {
 impl std::fmt::Debug for Bls12381PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Bls12381PublicKey")
-            .field(&format_args!("\"{}\"", self))
+            .field(&format_args!("\"{self}\""))
             .finish()
     }
 }
 
+/// A bls12381 min-sig signature.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// bls-signature = 48OCTECT
+/// ```
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(
     feature = "serde",
@@ -193,7 +215,7 @@ impl std::fmt::Display for Bls12381Signature {
 impl std::fmt::Debug for Bls12381Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Bls12381Signature")
-            .field(&format_args!("\"{}\"", self))
+            .field(&format_args!("\"{self}\""))
             .finish()
     }
 }

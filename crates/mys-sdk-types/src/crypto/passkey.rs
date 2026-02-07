@@ -2,59 +2,118 @@ use super::Secp256r1PublicKey;
 use super::Secp256r1Signature;
 use super::SimpleSignature;
 
-/// An passkey authenticator with parsed fields. See field defition below. Can be initialized from [struct RawPasskeyAuthenticator].
+/// A passkey authenticator.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// passkey-bcs = bytes               ; where the contents of the bytes are
+///                                   ; defined by <passkey>
+/// passkey     = passkey-flag
+///               bytes               ; passkey authenticator data
+///               client-data-json    ; valid json
+///               simple-signature    ; required to be a secp256r1 signature
+///
+/// client-data-json = string ; valid json
+/// ```
+///
+/// See [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata) for
+/// the required json-schema for the `client-data-json` rule. In addition, MySo currently requires
+/// that the `CollectedClientData.type` field is required to be `webauthn.get`.
+///
+/// Note: Due to historical reasons, signatures are serialized slightly different from the majority
+/// of the types in MySocial. In particular if a signature is ever embedded in another structure it
+/// generally is serialized as `bytes` meaning it has a length prefix that defines the length of
+/// the completely serialized signature.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PasskeyAuthenticator {
-    /// Compact r1 public key upon passkey creation.
-    /// Initialized from `user_signature` in `RawPasskeyAuthenticator`.
+    /// The secp256r1 public key for this passkey.
     public_key: Secp256r1PublicKey,
 
-    /// Normalized r1 signature returned by passkey.
-    /// Initialized from `user_signature` in `RawPasskeyAuthenticator`.
+    /// The secp256r1 signature from the passkey.
     signature: Secp256r1Signature,
 
-    /// Parsed challenge bytes from `client_data_json.challenge`.
+    /// Parsed base64url decoded challenge bytes from `client_data_json.challenge`.
     challenge: Vec<u8>,
 
-    /// `authenticatorData` is a bytearray that encodes
-    /// [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data)
-    /// structure returned by the authenticator attestation
-    /// response as is.
+    /// Opaque authenticator data for this passkey signature.
+    ///
+    /// See [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) for
+    /// more information on this field.
     authenticator_data: Vec<u8>,
 
-    /// `clientDataJSON` contains a JSON-compatible
-    /// UTF-8 encoded serialization of the client
-    /// data which is passed to the authenticator by
-    ///  the client during the authentication request
-    /// (see [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata))
+    /// Structured, unparsed, JSON for this passkey signature.
+    ///
+    /// See [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata)
+    /// for more information on this field.
     client_data_json: String,
 }
 
 impl PasskeyAuthenticator {
+    /// Opaque authenticator data for this passkey signature.
+    ///
+    /// See [Authenticator Data](https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data) for
+    /// more information on this field.
     pub fn authenticator_data(&self) -> &[u8] {
         &self.authenticator_data
     }
 
+    /// Structured, unparsed, JSON for this passkey signature.
+    ///
+    /// See [CollectedClientData](https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata)
+    /// for more information on this field.
     pub fn client_data_json(&self) -> &str {
         &self.client_data_json
     }
 
+    /// The parsed challenge message for this passkey signature.
+    ///
+    /// This is parsed by decoding the base64url data from the `client_data_json.challenge` field.
     pub fn challenge(&self) -> &[u8] {
         &self.challenge
     }
 
+    /// The passkey signature.
     pub fn signature(&self) -> SimpleSignature {
         SimpleSignature::Secp256r1 {
             signature: self.signature,
             public_key: self.public_key,
         }
     }
+
+    /// The passkey public key
+    pub fn public_key(&self) -> PasskeyPublicKey {
+        PasskeyPublicKey::new(self.public_key)
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Public key of a `PasskeyAuthenticator`.
+///
+/// This is used to derive the onchain `Address` for a `PasskeyAuthenticator`.
+///
+/// # BCS
+///
+/// The BCS serialized form for this type is defined by the following ABNF:
+///
+/// ```text
+/// passkey-public-key = secp256r1-public-key
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+#[cfg_attr(feature = "proptest", derive(test_strategy::Arbitrary))]
 pub struct PasskeyPublicKey(Secp256r1PublicKey);
 
 impl PasskeyPublicKey {
+    pub fn new(public_key: Secp256r1PublicKey) -> Self {
+        Self(public_key)
+    }
+
+    /// The underlying `Secp256r1PublicKey` for this passkey.
     pub fn inner(&self) -> &Secp256r1PublicKey {
         &self.0
     }
@@ -167,13 +226,14 @@ mod serialization {
 
             // decode unpadded url endoded base64 data per spec:
             // https://w3c.github.io/webauthn/#base64url-encoding
-            let challenge =
-                <base64ct::Base64UrlUnpadded as base64ct::Encoding>::decode_vec(&challenge)
-                    .map_err(|e| {
-                        serde::de::Error::custom(format!(
+            let challenge = <base64ct::Base64UrlUnpadded as base64ct::Encoding>::decode_vec(
+                &challenge,
+            )
+            .map_err(|e| {
+                serde::de::Error::custom(format!(
                     "unable to decode base64urlunpadded into 3-byte intent and 32-byte digest: {e}"
                 ))
-                    })?;
+            })?;
 
             Ok(Self {
                 public_key,
@@ -241,7 +301,7 @@ mod serialization {
     /// [5.8.1.1 Serialization]: https://w3c.github.io/webauthn/#clientdatajson-serialization
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
-    pub struct CollectedClientData {
+    pub(super) struct CollectedClientData {
         /// This member contains the value [`ClientDataType::Create`] when creating new credentials, and
         /// [`ClientDataType::Get`] when getting an assertion from an existing credential. The purpose
         /// of this member is to prevent certain types of signature confusion attacks (where an attacker
@@ -276,10 +336,10 @@ mod serialization {
 
     /// Used to limit the values of [`CollectedClientData::ty`] and serializes to static strings.
     #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
-    pub enum ClientDataType {
+    pub(super) enum ClientDataType {
         /// Serializes to the string `"webauthn.get"`
         ///
-        /// Passkey's in MySocial only support the value `"webauthn.get"`, other values will be rejected.
+        /// Passkey's in MySo only support the value `"webauthn.get"`, other values will be rejected.
         #[serde(rename = "webauthn.get")]
         Get,
         // /// Serializes to the string `"webauthn.create"`

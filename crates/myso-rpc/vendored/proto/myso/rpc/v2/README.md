@@ -1,5 +1,5 @@
 ## Overview
-This package defines a number of APIs for interacting with services in the MySo
+This package defines a number of APIs for interacting with services in the MySocial
 ecosystem. Some of the below API semantics and guidelines are inspired by
 [Google's AIPs](https://google.aip.dev/) and apply to all services in this
 package. For information on the individual services themselves, see their
@@ -7,11 +7,11 @@ definitions:
 
 - [`LedgerService`](./ledger_service.proto)
 - [`StateService`](./state_service.proto)
-- [`MovePackageService`](./move_package_service.proto.proto)
+- [`MovePackageService`](./move_package_service.proto)
 - [`SignatureVerificationService`](./signature_verification_service.proto)
-- [`SubscriptionService`](./subscription_service.proto.proto)
-- [`TransactionExecutionService`](./transaction_execution_service.proto.proto)
-- [`NameService`](./name_service.proto.proto)
+- [`SubscriptionService`](./subscription_service.proto)
+- [`TransactionExecutionService`](./transaction_execution_service.proto)
+- [`NameService`](./name_service.proto)
 
 ## Encoding
 In order to improve usability of these APIs a number of identifiers are

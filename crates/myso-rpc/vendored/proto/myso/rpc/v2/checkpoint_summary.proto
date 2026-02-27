@@ -11,10 +11,10 @@ import "myso/rpc/v2/bcs.proto";
 import "myso/rpc/v2/gas_cost_summary.proto";
 import "myso/rpc/v2/signature.proto";
 
-// A header for a checkpoint on the MySo blockchain.
+// A header for a checkpoint on the MySocial blockchain.
 //
-// On the MySo network, checkpoints define the history of the blockchain. They are quite similar to
-// the concept of blocks used by other blockchains like Bitcoin or Ethereum. The MySo blockchain,
+// On the MySocial network, checkpoints define the history of the blockchain. They are quite similar to
+// the concept of blocks used by other blockchains like Bitcoin or Ethereum. The MySocial blockchain,
 // however, forms checkpoints after transaction execution has already happened to provide a
 // certified history of the chain, instead of being formed before execution.
 //

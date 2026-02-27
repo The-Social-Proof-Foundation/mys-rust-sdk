@@ -882,7 +882,7 @@ pub mod execution_error {
         /// The modules in the package must have their self-addresses set to zero.
         PublishErrorNonZeroAddress = 10,
         /// MySo Move bytecode verification error.
-        MySoMoveVerificationError = 11,
+        MysoMoveVerificationError = 11,
         /// Error from a non-abort instruction.
         /// Possible causes:
         /// Arithmetic error, stack overflow, max value depth, or similar.
@@ -931,7 +931,7 @@ pub mod execution_error {
         /// Certificate is on the deny list.
         CertificateDenied = 30,
         /// MySo Move bytecode verification timed out.
-        MySoMoveVerificationTimedout = 31,
+        MysoMoveVerificationTimedout = 31,
         /// The requested consensus object operation is not allowed.
         ConsensusObjectOperationNotAllowed = 32,
         /// Requested consensus object has been deleted.
@@ -977,7 +977,7 @@ pub mod execution_error {
                 Self::InsufficientCoinBalance => "INSUFFICIENT_COIN_BALANCE",
                 Self::CoinBalanceOverflow => "COIN_BALANCE_OVERFLOW",
                 Self::PublishErrorNonZeroAddress => "PUBLISH_ERROR_NON_ZERO_ADDRESS",
-                Self::MySoMoveVerificationError => "MYSO_MOVE_VERIFICATION_ERROR",
+                Self::MysoMoveVerificationError => "MYSO_MOVE_VERIFICATION_ERROR",
                 Self::MovePrimitiveRuntimeError => "MOVE_PRIMITIVE_RUNTIME_ERROR",
                 Self::MoveAbort => "MOVE_ABORT",
                 Self::VmVerificationOrDeserializationError => {
@@ -1005,7 +1005,7 @@ pub mod execution_error {
                 Self::PackageUpgradeError => "PACKAGE_UPGRADE_ERROR",
                 Self::WrittenObjectsTooLarge => "WRITTEN_OBJECTS_TOO_LARGE",
                 Self::CertificateDenied => "CERTIFICATE_DENIED",
-                Self::MySoMoveVerificationTimedout => "MYSO_MOVE_VERIFICATION_TIMEDOUT",
+                Self::MysoMoveVerificationTimedout => "MYSO_MOVE_VERIFICATION_TIMEDOUT",
                 Self::ConsensusObjectOperationNotAllowed => {
                     "CONSENSUS_OBJECT_OPERATION_NOT_ALLOWED"
                 }
@@ -1043,7 +1043,7 @@ pub mod execution_error {
                 "PUBLISH_ERROR_NON_ZERO_ADDRESS" => {
                     Some(Self::PublishErrorNonZeroAddress)
                 }
-                "MYSO_MOVE_VERIFICATION_ERROR" => Some(Self::MySoMoveVerificationError),
+                "MYSO_MOVE_VERIFICATION_ERROR" => Some(Self::MysoMoveVerificationError),
                 "MOVE_PRIMITIVE_RUNTIME_ERROR" => Some(Self::MovePrimitiveRuntimeError),
                 "MOVE_ABORT" => Some(Self::MoveAbort),
                 "VM_VERIFICATION_OR_DESERIALIZATION_ERROR" => {
@@ -1072,7 +1072,7 @@ pub mod execution_error {
                 "WRITTEN_OBJECTS_TOO_LARGE" => Some(Self::WrittenObjectsTooLarge),
                 "CERTIFICATE_DENIED" => Some(Self::CertificateDenied),
                 "MYSO_MOVE_VERIFICATION_TIMEDOUT" => {
-                    Some(Self::MySoMoveVerificationTimedout)
+                    Some(Self::MysoMoveVerificationTimedout)
                 }
                 "CONSENSUS_OBJECT_OPERATION_NOT_ALLOWED" => {
                     Some(Self::ConsensusObjectOperationNotAllowed)
@@ -3414,7 +3414,9 @@ pub mod move_package_service_client {
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("myso.rpc.v2.MovePackageService", "GetDatatype"));
+                .insert(
+                    GrpcMethod::new("myso.rpc.v2.MovePackageService", "GetDatatype"),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_function(
@@ -3438,7 +3440,9 @@ pub mod move_package_service_client {
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("myso.rpc.v2.MovePackageService", "GetFunction"));
+                .insert(
+                    GrpcMethod::new("myso.rpc.v2.MovePackageService", "GetFunction"),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn list_package_versions(
@@ -5705,7 +5709,9 @@ pub mod state_service_client {
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("myso.rpc.v2.StateService", "ListDynamicFields"));
+                .insert(
+                    GrpcMethod::new("myso.rpc.v2.StateService", "ListDynamicFields"),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn list_owned_objects(

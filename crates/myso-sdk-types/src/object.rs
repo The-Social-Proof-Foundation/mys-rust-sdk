@@ -548,13 +548,13 @@ mod serialization {
         Other(StructTag),
         /// A MYSO coin (i.e., `0x2::coin::Coin<0x2::myso::MYSO>`)
         GasCoin,
-        /// A record of a staked MYSO coin (i.e., `0x3::staking_pool::StakedSui`)
-        StakedSui,
+        /// A record of a staked MYSO coin (i.e., `0x3::staking_pool::StakedMySo`)
+        StakedMySo,
         /// A non-MYSO coin type (i.e., `0x2::coin::Coin<T> where T != 0x2::myso::MYSO`)
         Coin(TypeTag),
         /// A MYSO balance accumulator field
         /// (i.e., `0x2::dynamic_field::Field<0x2::accumulator::Key<0x2::balance::Balance<0x2::myso::MYSO>>, 0x2::accumulator::U128>`)
-        SuiBalanceAccumulatorField,
+        MySoBalanceAccumulatorField,
         /// A non-MYSO balance accumulator field
         /// (i.e., `0x2::dynamic_field::Field<0x2::accumulator::Key<0x2::balance::Balance<T>>, 0x2::accumulator::U128>`
         /// where T != 0x2::myso::MYSO)
@@ -571,13 +571,13 @@ mod serialization {
         Other(&'a StructTag),
         /// A MYSO coin (i.e., `0x2::coin::Coin<0x2::myso::MYSO>`)
         GasCoin,
-        /// A record of a staked MYSO coin (i.e., `0x3::staking_pool::StakedSui`)
-        StakedSui,
+        /// A record of a staked MYSO coin (i.e., `0x3::staking_pool::StakedMySo`)
+        StakedMySo,
         /// A non-MYSO coin type (i.e., `0x2::coin::Coin<T> where T != 0x2::myso::MYSO`)
         Coin(&'a TypeTag),
         /// A MYSO balance accumulator field
         /// (i.e., `0x2::dynamic_field::Field<0x2::accumulator::Key<0x2::balance::Balance<0x2::myso::MYSO>>, 0x2::accumulator::U128>`)
-        SuiBalanceAccumulatorField,
+        MySoBalanceAccumulatorField,
         /// A non-MYSO balance accumulator field
         /// (i.e., `0x2::dynamic_field::Field<0x2::accumulator::Key<0x2::balance::Balance<T>>, 0x2::accumulator::U128>`
         /// where T != 0x2::myso::MYSO)
@@ -592,9 +592,9 @@ mod serialization {
             match self {
                 MoveStructType::Other(tag) => tag,
                 MoveStructType::GasCoin => StructTag::gas_coin(),
-                MoveStructType::StakedSui => StructTag::staked_myso(),
+                MoveStructType::StakedMySo => StructTag::staked_myso(),
                 MoveStructType::Coin(type_tag) => StructTag::coin(type_tag),
-                MoveStructType::SuiBalanceAccumulatorField => {
+                MoveStructType::MySoBalanceAccumulatorField => {
                     StructTag::balance_accumulator_field(StructTag::myso().into())
                 }
                 MoveStructType::BalanceAccumulatorField(type_tag) => {
@@ -621,15 +621,15 @@ mod serialization {
                 }
             } else if address == &Address::THREE
                 && module == "staking_pool"
-                && name == "StakedSui"
+                && name == "StakedMySo"
                 && type_params.is_empty()
             {
-                Self::StakedSui
+                Self::StakedMySo
             } else if let Some(coin_type) = s.is_balance_accumulator_field() {
                 if let TypeTag::Struct(s_inner) = coin_type
                     && s_inner.is_gas()
                 {
-                    Self::SuiBalanceAccumulatorField
+                    Self::MySoBalanceAccumulatorField
                 } else {
                     Self::BalanceAccumulatorField(coin_type)
                 }
@@ -702,7 +702,7 @@ mod serialization {
 
         #[test]
         fn object_fixture() {
-            const SUI_COIN: &[u8] = &[
+            const MYSO_COIN: &[u8] = &[
                 0, 1, 1, 32, 79, 43, 0, 0, 0, 0, 0, 40, 35, 95, 175, 213, 151, 87, 206, 190, 35,
                 131, 79, 35, 254, 22, 15, 181, 40, 108, 28, 77, 68, 229, 107, 254, 191, 160, 196,
                 186, 42, 2, 122, 53, 52, 133, 199, 58, 0, 0, 0, 0, 0, 79, 255, 208, 0, 85, 34, 190,
@@ -712,7 +712,7 @@ mod serialization {
                 141, 20, 15, 85, 96, 19, 15, 0, 0, 0, 0, 0,
             ];
 
-            const SUI_STAKE: &[u8] = &[
+            const MYSO_STAKE: &[u8] = &[
                 0, 2, 1, 154, 1, 52, 5, 0, 0, 0, 0, 80, 3, 112, 71, 231, 166, 234, 205, 164, 99,
                 237, 29, 56, 97, 170, 21, 96, 105, 158, 227, 122, 22, 251, 60, 162, 12, 97, 151,
                 218, 71, 253, 231, 239, 116, 138, 12, 233, 128, 195, 128, 77, 33, 38, 122, 77, 53,
@@ -802,7 +802,7 @@ mod serialization {
                 13, 89, 18, 159, 205, 129, 112, 131, 112, 192, 126, 0, 0, 0, 0, 0,
             ];
 
-            for fixture in [SUI_COIN, SUI_STAKE, NFT, FUD_COIN, BULLSHARK_PACKAGE] {
+            for fixture in [MYSO_COIN, MYSO_STAKE, NFT, FUD_COIN, BULLSHARK_PACKAGE] {
                 let object: Object = bcs::from_bytes(fixture).unwrap();
                 assert_eq!(bcs::to_bytes(&object).unwrap(), fixture);
 

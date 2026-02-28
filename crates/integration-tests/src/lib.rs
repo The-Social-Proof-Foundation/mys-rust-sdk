@@ -6,7 +6,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Child;
 use std::process::Command;
-use myso_crypto::SuiSigner;
+use myso_crypto::MySoSigner;
 use myso_crypto::ed25519::Ed25519PrivateKey;
 use myso_rpc::Client;
 use myso_rpc::field::FieldMask;
@@ -75,7 +75,7 @@ async fn wait_for_ready(client: &mut Client) -> Result<()> {
 }
 
 /// Handle for a MySo network running via pre-compiled binary
-pub struct SuiNetworkHandle {
+pub struct MySoNetworkHandle {
     /// Child process running myso
     process: Child,
 
@@ -94,20 +94,20 @@ pub struct SuiNetworkHandle {
     pub user_keys: Vec<Ed25519PrivateKey>,
 }
 
-impl Drop for SuiNetworkHandle {
+impl Drop for MySoNetworkHandle {
     fn drop(&mut self) {
         let _ = self.process.kill();
     }
 }
 
-pub struct SuiNetworkBuilder {
+pub struct MySoNetworkBuilder {
     // pub dir: Option<PathBuf>,
     pub num_validators: usize,
     pub epoch_duration_ms: u64,
     pub myso_binary_path: Option<PathBuf>, // Optional custom binary
 }
 
-impl Default for SuiNetworkBuilder {
+impl Default for MySoNetworkBuilder {
     fn default() -> Self {
         Self {
             num_validators: DEFAULT_NUM_VALIDATORS,
@@ -118,7 +118,7 @@ impl Default for SuiNetworkBuilder {
     }
 }
 
-impl SuiNetworkBuilder {
+impl MySoNetworkBuilder {
     pub fn with_num_validators(mut self, n: usize) -> Self {
         self.num_validators = n;
         self
@@ -139,7 +139,7 @@ impl SuiNetworkBuilder {
     //     self
     // }
 
-    pub async fn build(self) -> Result<SuiNetworkHandle> {
+    pub async fn build(self) -> Result<MySoNetworkHandle> {
         // Check for myso binary availability first
         if find_myso_binary().is_none() {
             return Err(anyhow::anyhow!(
@@ -158,7 +158,7 @@ impl SuiNetworkBuilder {
 
         let mut client = myso_rpc::Client::new(&rpc_url)?;
         wait_for_ready(&mut client).await?;
-        let mut myso = SuiNetworkHandle {
+        let mut myso = MySoNetworkHandle {
             process,
             dir,
             rpc_url,
@@ -169,7 +169,7 @@ impl SuiNetworkBuilder {
             user_keys,
         };
 
-        // Make sure SuiSystemState has been upgraded to v2
+        // Make sure MySoSystemState has been upgraded to v2
         myso.upgrade_myso_system_state().await?;
 
         // Make sure validator accounts are funded
@@ -286,7 +286,7 @@ fn load_keys(dir: &Path) -> Result<(BTreeMap<Address, Ed25519PrivateKey>, Vec<Ed
     Ok((validator_keys, user_keys))
 }
 
-impl SuiNetworkHandle {
+impl MySoNetworkHandle {
     pub async fn fund(&mut self, requests: &[(Address, u64)]) -> Result<()> {
         let private_key = self.user_keys.first().unwrap();
         let sender = private_key.public_key().derive_address();
@@ -462,7 +462,7 @@ mod tests {
             return Ok(());
         }
 
-        let mut myso = SuiNetworkBuilder::default().build().await?;
+        let mut myso = MySoNetworkBuilder::default().build().await?;
 
         // stream ~10 checkpoints to make sure things work
         let mut stream = myso

@@ -18,7 +18,7 @@ use super::Result;
 
 #[derive(Debug)]
 pub struct DelegatedStake {
-    /// ObjectId of this StakedSui delegation.
+    /// ObjectId of this StakedMySo delegation.
     pub staked_myso_id: Address,
     /// Validator's Address.
     pub validator_address: Address,
@@ -33,7 +33,7 @@ pub struct DelegatedStake {
 }
 
 #[derive(serde::Deserialize, Debug)]
-struct StakedSui {
+struct StakedMySo {
     id: Address,
     /// ID of the staking pool we are staking with.
     pool_id: Address,
@@ -63,7 +63,7 @@ impl Client {
     }
 
     pub async fn list_delegated_stake(&mut self, address: &Address) -> Result<Vec<DelegatedStake>> {
-        const STAKED_SUI_TYPE: &str = "0x3::staking_pool::StakedSui";
+        const STAKED_MYSO_TYPE: &str = "0x3::staking_pool::StakedMySo";
 
         let mut delegated_stakes = Vec::new();
 
@@ -71,7 +71,7 @@ impl Client {
             .with_owner(address)
             .with_page_size(500u32)
             .with_read_mask(FieldMask::from_str("contents"))
-            .with_object_type(STAKED_SUI_TYPE);
+            .with_object_type(STAKED_MYSO_TYPE);
 
         loop {
             let response = self
@@ -80,7 +80,7 @@ impl Client {
                 .await?
                 .into_inner();
 
-            // with the fetched StakedSui objects, attempt to calculate the rewards and create a
+            // with the fetched StakedMySo objects, attempt to calculate the rewards and create a
             // DelegatedStake for each.
             delegated_stakes.extend(
                 self.try_create_delegated_stake_info(&response.objects)
@@ -107,11 +107,11 @@ impl Client {
             .iter()
             .map(|o| {
                 o.contents()
-                    .deserialize::<StakedSui>()
+                    .deserialize::<StakedMySo>()
                     .map_err(Into::into)
                     .map_err(tonic::Status::from_error)
             })
-            .collect::<Result<Vec<StakedSui>>>()?;
+            .collect::<Result<Vec<StakedMySo>>>()?;
 
         let ids = staked_mysos.iter().map(|s| s.id).collect::<Vec<_>>();
         let pool_ids = staked_mysos.iter().map(|s| s.pool_id).collect::<Vec<_>>();

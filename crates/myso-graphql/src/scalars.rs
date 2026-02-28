@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use serde::Deserialize;
 
-/// `SuiAddress` scalar in MySo GraphQL schema. 32-byte hex-encoded address with `0x` prefix.
+/// `MySoAddress` scalar in MySo GraphQL schema. 32-byte hex-encoded address with `0x` prefix.
 pub use myso_sdk_types::Address;
 
 /// Useful for digest fields (Base58 string). Not a scalar in MySo GraphQL schema.

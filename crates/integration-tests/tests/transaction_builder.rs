@@ -1,7 +1,7 @@
 use anyhow::Result;
-use integration_tests::SuiNetworkBuilder;
+use integration_tests::MySoNetworkBuilder;
 use std::str::FromStr;
-use myso_crypto::SuiSigner;
+use myso_crypto::MySoSigner;
 use myso_rpc::field::FieldMask;
 use myso_rpc::field::FieldMaskUtil;
 use myso_rpc::proto::myso::rpc::v2::ExecuteTransactionRequest;
@@ -19,7 +19,7 @@ async fn test_move_call() -> Result<()> {
         eprintln!("Skipping integration test: myso binary not found. Set MYSO_BINARY env var or install myso to run this test.");
         return Ok(());
     }
-    let mut myso = SuiNetworkBuilder::default().build().await?;
+    let mut myso = MySoNetworkBuilder::default().build().await?;
     let private_key = myso.user_keys.first().unwrap();
     let sender = private_key.public_key().derive_address();
 
@@ -170,7 +170,7 @@ async fn test_publish() {
         eprintln!("Skipping integration test: myso binary not found. Set MYSO_BINARY env var or install myso to run this test.");
         return;
     }
-    let mut myso = SuiNetworkBuilder::default().build().await.unwrap();
+    let mut myso = MySoNetworkBuilder::default().build().await.unwrap();
     let private_key = myso.user_keys.first().unwrap();
     let sender = private_key.public_key().derive_address();
 
@@ -207,7 +207,7 @@ async fn test_upgrade() -> Result<()> {
         eprintln!("Skipping integration test: myso binary not found. Set MYSO_BINARY env var or install myso to run this test.");
         return Ok(());
     }
-    let mut myso = SuiNetworkBuilder::default().build().await.unwrap();
+    let mut myso = MySoNetworkBuilder::default().build().await.unwrap();
     let private_key = myso.user_keys.first().unwrap();
     let sender = private_key.public_key().derive_address();
 

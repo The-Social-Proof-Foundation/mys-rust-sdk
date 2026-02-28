@@ -3,7 +3,7 @@
 
 type Query {
     chainIdentifier: String
-    object(id: SuiAddress!): Object
+    object(id: MySoAddress!): Object
     epoch: Epoch
     checkpoint: Checkpoint
     checkpoints: CheckpointConnection
@@ -11,7 +11,7 @@ type Query {
 }
 
 type Object {
-    address: SuiAddress
+    address: MySoAddress
     version: Int
 }
 
@@ -33,6 +33,6 @@ type EpochConnection {
     nodes: [Epoch]
 }
 
-scalar SuiAddress
+scalar MySoAddress
 scalar Int
 scalar String

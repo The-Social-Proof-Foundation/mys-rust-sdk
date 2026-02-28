@@ -289,7 +289,7 @@ impl StructTag {
         Self {
             address: Address::THREE,
             module: Identifier::new("staking_pool").unwrap(),
-            name: Identifier::new("StakedSui").unwrap(),
+            name: Identifier::new("StakedMySo").unwrap(),
             type_params: vec![],
         }
     }

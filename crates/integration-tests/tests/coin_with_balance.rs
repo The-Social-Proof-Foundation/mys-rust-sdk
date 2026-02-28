@@ -1,7 +1,7 @@
 use anyhow::Result;
 use futures::TryStreamExt;
 use integration_tests::*;
-use myso_crypto::SuiSigner;
+use myso_crypto::MySoSigner;
 use myso_rpc::field::FieldMask;
 use myso_rpc::field::FieldMaskUtil;
 use myso_rpc::proto::myso::rpc::v2::ExecuteTransactionRequest;
@@ -17,7 +17,7 @@ async fn large_number_of_requests() -> Result<()> {
         eprintln!("Skipping integration test: myso binary not found. Set MYSO_BINARY env var or install myso to run this test.");
         return Ok(());
     }
-    let mut myso = SuiNetworkBuilder::default().build().await?;
+    let mut myso = MySoNetworkBuilder::default().build().await?;
     let recipient = Address::ZERO;
 
     let requests = vec![(recipient, 1_000_000_000u64); 500];
@@ -56,7 +56,7 @@ async fn zero_value_requests() -> Result<()> {
         eprintln!("Skipping integration test: myso binary not found. Set MYSO_BINARY env var or install myso to run this test.");
         return Ok(());
     }
-    let mut myso = SuiNetworkBuilder::default().build().await?;
+    let mut myso = MySoNetworkBuilder::default().build().await?;
     let private_key = myso.user_keys.first().unwrap();
     let sender = private_key.public_key().derive_address();
     let recipient = Address::ZERO;

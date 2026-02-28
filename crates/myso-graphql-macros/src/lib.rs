@@ -98,8 +98,8 @@ fn derive_query_response_impl(input: DeriveInput) -> Result<TokenStream2, syn::E
     // If a custom schema path is provided, load it; otherwise use the embedded MySo schema.
     let loaded_schema = if let Some(path) = &parsed.schema {
         // Resolve path relative to the crate's directory.
-        // SUI_GRAPHQL_SCHEMA_DIR is used by trybuild tests (which run from a temp directory).
-        let base_dir = std::env::var("SUI_GRAPHQL_SCHEMA_DIR")
+        // MYSO_GRAPHQL_SCHEMA_DIR is used by trybuild tests (which run from a temp directory).
+        let base_dir = std::env::var("MYSO_GRAPHQL_SCHEMA_DIR")
             .or_else(|_| std::env::var("CARGO_MANIFEST_DIR"))
             .unwrap();
         let full_path = std::path::Path::new(&base_dir).join(path);

@@ -66,7 +66,7 @@ impl Client {
         }
 
         const QUERY: &str = r#"
-            query($owner: SuiAddress!, $coinType: String!) {
+            query($owner: MySoAddress!, $coinType: String!) {
                 address(address: $owner) {
                     balance(coinType: $coinType) {
                         coinType {
@@ -146,7 +146,7 @@ impl Client {
         }
 
         const QUERY: &str = r#"
-            query($owner: SuiAddress!, $after: String) {
+            query($owner: MySoAddress!, $after: String) {
                 address(address: $owner) {
                     balances(after: $after) {
                         pageInfo {

@@ -72,7 +72,7 @@ type Address implements IAddressable {
 	"""
 	The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
 	"""
-	address: SuiAddress!
+	address: MySoAddress!
 	"""
 	Attempts to fetch the object at this address.
 	"""
@@ -89,9 +89,9 @@ type Address implements IAddressable {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default MySoNS name for this address.
 	"""
-	defaultSuinsName: String
+	defaultMySonsName: String
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
 	
@@ -518,7 +518,7 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	The CoinMetadata's ID.
 	"""
-	address: SuiAddress!
+	address: MySoAddress!
 	"""
 	Whether the `DenyCap` can be used to enable a global pause that behaves as if all addresses were added to the deny list. `null` indicates that it is not known whether the currency can be paused or not. This field is only populated on currencies held in the Coin Registry. To determine whether a legacy currency can be paused, check the contents of its `DenyCap`, if it can be found.
 	"""
@@ -542,9 +542,9 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	decimals: Int
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default MySoNS name for this address.
 	"""
-	defaultSuinsName: String
+	defaultMySonsName: String
 	"""
 	If the currency is regulated, this object represents the capability to modify the deny list. If a capability is known but wrapped, its address can be fetched but other fields will not be accessible.
 	"""
@@ -830,7 +830,7 @@ type ConsensusObjectCancelled {
 	"""
 	The ID of the consensus-managed object that the transaction intended to access.
 	"""
-	address: SuiAddress
+	address: MySoAddress
 	"""
 	Reason why the transaction was cancelled.
 	"""
@@ -885,7 +885,7 @@ type DynamicField implements IAddressable & IMoveObject & IObject {
 	"""
 	The DynamicField's ID.
 	"""
-	address: SuiAddress!
+	address: MySoAddress!
 	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::myso::MYSO`), owned by this address.
 	
@@ -901,9 +901,9 @@ type DynamicField implements IAddressable & IMoveObject & IObject {
 	"""
 	contents: MoveValue
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default MySoNS name for this address.
 	"""
-	defaultSuinsName: String
+	defaultMySonsName: String
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
@@ -1180,7 +1180,7 @@ type Epoch {
 	"""
 	systemStakeSubsidy: StakeSubsidy
 	"""
-	The value of the `version` field of `0x5`, the `0x3::myso::SuiSystemState` object.
+	The value of the `version` field of `0x5`, the `0x3::myso::MySoSystemState` object.
 	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
 	"""
 	systemStateVersion: UInt53
@@ -1333,7 +1333,7 @@ input EventFilter {
 	"""
 	Filter on events by transaction sender address.
 	"""
-	sender: SuiAddress
+	sender: MySoAddress
 	"""
 	This field is used to specify the type of event emitted.
 	
@@ -1517,7 +1517,7 @@ Interface implemented by GraphQL types representing entities that are identified
 An address uniquely represents either the public key of an account, or an object's ID, but never both. It is not possible to determine which type an address represents up-front. If an object is wrapped, its contents will not be accessible via its address, but it will still be possible to access other objects it owns.
 """
 interface IAddressable {
-	address: SuiAddress!
+	address: MySoAddress!
 	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::myso::MYSO`), owned by this address.
 	
@@ -1529,9 +1529,9 @@ interface IAddressable {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default MySoNS name for this address.
 	"""
-	defaultSuinsName: String
+	defaultMySonsName: String
 	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::myso::MYSO`) owned by this address.
 	
@@ -1694,11 +1694,11 @@ type Linkage {
 	"""
 	The ID on-chain of the first version of the dependency.
 	"""
-	originalId: SuiAddress
+	originalId: MySoAddress
 	"""
 	The ID on-chain of the version of the dependency that this package depends on.
 	"""
-	upgradedId: SuiAddress
+	upgradedId: MySoAddress
 	"""
 	The version of the dependency that this package depends on.
 	"""
@@ -2103,7 +2103,7 @@ type MoveObject implements IAddressable & IMoveObject & IObject {
 	"""
 	The MoveObject's ID.
 	"""
-	address: SuiAddress!
+	address: MySoAddress!
 	"""
 	Attempts to convert the object into a CoinMetadata.
 	"""
@@ -2127,9 +2127,9 @@ type MoveObject implements IAddressable & IMoveObject & IObject {
 	"""
 	contents: MoveValue
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default MySoNS name for this address.
 	"""
-	defaultSuinsName: String
+	defaultMySonsName: String
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
@@ -2260,7 +2260,7 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	The MovePackage's ID.
 	"""
-	address: SuiAddress!
+	address: MySoAddress!
 	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::myso::MYSO`), owned by this address.
 	
@@ -2272,9 +2272,9 @@ type MovePackage implements IAddressable & IObject {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default MySoNS name for this address.
 	"""
-	defaultSuinsName: String
+	defaultMySonsName: String
 	"""
 	32-byte hash that identifies the package's contents, encoded in Base58.
 	"""
@@ -2580,7 +2580,7 @@ type MutateConsensusStreamEnded {
 	"""
 	The ID of the consensus-managed object.
 	"""
-	address: SuiAddress
+	address: MySoAddress
 	"""
 	The sequence number associated with the consensus stream ending.
 	"""
@@ -2613,7 +2613,7 @@ type Object implements IAddressable & IObject {
 	"""
 	The Object's ID.
 	"""
-	address: SuiAddress!
+	address: MySoAddress!
 	"""
 	Attempts to convert the object into a MoveObject.
 	"""
@@ -2633,9 +2633,9 @@ type Object implements IAddressable & IObject {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default MySoNS name for this address.
 	"""
-	defaultSuinsName: String
+	defaultMySonsName: String
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
@@ -2723,7 +2723,7 @@ type ObjectChange {
 	"""
 	The address of the object that has changed.
 	"""
-	address: SuiAddress!
+	address: MySoAddress!
 	"""
 	Whether the ID was created in this transaction.
 	"""
@@ -2813,7 +2813,7 @@ input ObjectFilter {
 	
 	This field is required if `ownerKind` is "ADDRESS" or "OBJECT". If provided without `ownerKind`, `ownerKind` defaults to "ADDRESS".
 	"""
-	owner: SuiAddress
+	owner: MySoAddress
 	"""
 	Filter on whether the object is address-owned, object-owned, shared, or immutable.
 	
@@ -2847,7 +2847,7 @@ input ObjectKey {
 	"""
 	The object's ID.
 	"""
-	address: SuiAddress!
+	address: MySoAddress!
 	"""
 	If specified, tries to fetch the latest version as of this checkpoint. Fails if the checkpoint is later than the RPC's latest checkpoint.
 	"""
@@ -2987,7 +2987,7 @@ input PackageKey {
 	"""
 	The object's ID.
 	"""
-	address: SuiAddress!
+	address: MySoAddress!
 	"""
 	If specified, tries to fetch the latest version as of this checkpoint.
 	"""
@@ -3098,7 +3098,7 @@ type PublishCommand {
 	"""
 	IDs of the transitive dependencies of the package to be published.
 	"""
-	dependencies: [SuiAddress!]
+	dependencies: [MySoAddress!]
 	"""
 	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
 	"""
@@ -3117,7 +3117,7 @@ type Pure {
 
 type Query {
 	"""
-	Look-up an account by its SuiAddress.
+	Look-up an account by its MySoAddress.
 	
 	If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
 	
@@ -3127,7 +3127,7 @@ type Query {
 	
 	Specifying a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
 	"""
-	address(address: SuiAddress!, rootVersion: UInt53): Address!
+	address(address: MySoAddress!, rootVersion: UInt53): Address!
 	"""
 	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
 	"""
@@ -3227,11 +3227,11 @@ type Query {
 	
 	Returns `null` if an object cannot be found that meets this criteria.
 	"""
-	object(address: SuiAddress!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): Object
+	object(address: MySoAddress!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): Object
 	"""
 	Paginate all versions of an object at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
 	"""
-	objectVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: VersionFilter): ObjectConnection
+	objectVersions(first: Int, after: String, last: Int, before: String, address: MySoAddress!, filter: VersionFilter): ObjectConnection
 	"""
 	Paginate objects in the live object set, optionally filtered by owner and/or type. `filter` can be one of:
 	
@@ -3253,13 +3253,13 @@ type Query {
 	
 	Note that this interpretation of `version` and "latest" differs from the one used by `Query.object`, because non-system package upgrades generate objects with different IDs. To fetch a package using the versioning semantics of objects, use `Object.asMovePackage` nested under `Query.object`.
 	"""
-	package(address: SuiAddress!, version: UInt53, atCheckpoint: UInt53): MovePackage
+	package(address: MySoAddress!, version: UInt53, atCheckpoint: UInt53): MovePackage
 	"""
 	Paginate all versions of a package at `address`, optionally bounding the versions exclusively from below with `filter.afterVersion` or from above with `filter.beforeVersion`.
 	
 	Different versions of a package will have different object IDs, unless they are system packages, but will share the same original ID.
 	"""
-	packageVersions(first: Int, after: String, last: Int, before: String, address: SuiAddress!, filter: VersionFilter): MovePackageConnection
+	packageVersions(first: Int, after: String, last: Int, before: String, address: MySoAddress!, filter: VersionFilter): MovePackageConnection
 	"""
 	Paginate all packages published on-chain, optionally bounded to packages published strictly after `filter.afterCheckpoint` and/or strictly before `filter.beforeCheckpoint`.
 	"""
@@ -3288,7 +3288,7 @@ type Query {
 	"""
 	simulateTransaction(transaction: JSON!, checksEnabled: Boolean, doGasSelection: Boolean): SimulationResult!
 	"""
-	Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
+	Look-up an account by its MySoNS name, assuming it has a valid, unexpired name registration.
 	"""
 	mysonsName(address: String!, rootVersion: UInt53): Address
 	"""
@@ -3325,7 +3325,7 @@ type Query {
 	- `intentScope` indicates whether `bytes` are to be parsed as a personal message or `TransactionData`.
 	- `author` is the signer's address.
 	"""
-	verifyZkLoginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: SuiAddress!): ZkLoginVerifyResult!
+	verifyZkLoginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: MySoAddress!): ZkLoginVerifyResult!
 }
 
 """
@@ -3367,7 +3367,7 @@ type ReadConsensusStreamEnded {
 	"""
 	The ID of the consensus-managed object.
 	"""
-	address: SuiAddress
+	address: MySoAddress
 	"""
 	The sequence number associated with the consensus stream ending.
 	"""
@@ -3545,7 +3545,7 @@ type SharedInput {
 	"""
 	The address of the shared object.
 	"""
-	address: SuiAddress
+	address: MySoAddress
 	"""
 	The version that this object was shared at.
 	"""
@@ -3648,9 +3648,9 @@ type StoreExecutionTimeObservationsTransaction {
 
 
 """
-String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
+String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (MySoAddress in output is guaranteed to be 66 characters long).
 """
-scalar SuiAddress
+scalar MySoAddress
 
 """
 Future behavior of a currency's supply.
@@ -3855,13 +3855,13 @@ input TransactionFilter {
 	Limit to transactions that interacted with the given address.
 	The address could be a sender, sponsor, or recipient of the transaction.
 	"""
-	affectedAddress: SuiAddress
+	affectedAddress: MySoAddress
 	"""
 	Limit to transactions that interacted with the given object.
 	The object could have been created, read, modified, deleted, wrapped, or unwrapped by the transaction.
 	Objects that were passed as a `Receiving` input are not considered to have been affected by a transaction unless they were actually received.
 	"""
-	affectedObject: SuiAddress
+	affectedObject: MySoAddress
 	"""
 	Filter to transactions that occurred strictly after the given checkpoint.
 	"""
@@ -3885,7 +3885,7 @@ input TransactionFilter {
 	"""
 	Limit to transactions that were sent by the given address.
 	"""
-	sentAddress: SuiAddress
+	sentAddress: MySoAddress
 }
 
 """
@@ -3977,7 +3977,7 @@ type TypeOrigin {
 	"""
 	The storage ID of the package that first defined this type.
 	"""
-	definingId: SuiAddress
+	definingId: MySoAddress
 	"""
 	Module defining the type.
 	"""
@@ -4034,11 +4034,11 @@ type UpgradeCommand {
 	"""
 	ID of the package being upgraded.
 	"""
-	currentPackage: SuiAddress
+	currentPackage: MySoAddress
 	"""
 	IDs of the transitive dependencies of the package to be published.
 	"""
-	dependencies: [SuiAddress!]
+	dependencies: [MySoAddress!]
 	"""
 	Bytecode for the modules to be published, BCS serialized and Base64 encoded.
 	"""
@@ -4062,7 +4062,7 @@ type Validator implements IAddressable {
 	"""
 	The validator's address.
 	"""
-	address: SuiAddress!
+	address: MySoAddress!
 	"""
 	The number of epochs for which this validator has been below the low stake threshold.
 	"""
@@ -4086,9 +4086,9 @@ type Validator implements IAddressable {
 	"""
 	credentials: ValidatorCredentials
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default MySoNS name for this address.
 	"""
-	defaultSuinsName: String
+	defaultMySonsName: String
 	"""
 	Validator's description.
 	"""
@@ -4157,7 +4157,7 @@ type Validator implements IAddressable {
 	"""
 	Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
 	"""
-	pendingTotalSuiWithdraw: BigInt
+	pendingTotalMySoWithdraw: BigInt
 	"""
 	Total number of pool tokens issued by the pool.
 	"""
@@ -4181,11 +4181,11 @@ type Validator implements IAddressable {
 	"""
 	The ID of this validator's `0x3::staking_pool::StakingPool`.
 	"""
-	stakingPoolId: SuiAddress!
+	stakingPoolId: MySoAddress!
 	"""
 	The total number of MYSO tokens in this pool.
 	"""
-	stakingPoolSuiBalance: BigInt
+	stakingPoolMySoBalance: BigInt
 	"""
 	The voting power of this validator in basis points (e.g., 100 = 1% voting power).
 	"""
@@ -4261,7 +4261,7 @@ type ValidatorSet {
 	"""
 	Object ID of the `Table` storing the inactive staking pools.
 	"""
-	inactivePoolsId: SuiAddress
+	inactivePoolsId: MySoAddress
 	"""
 	Size of the inactive pools `Table`.
 	"""
@@ -4269,7 +4269,7 @@ type ValidatorSet {
 	"""
 	Object ID of the wrapped object `TableVec` storing the pending active validators.
 	"""
-	pendingActiveValidatorsId: SuiAddress
+	pendingActiveValidatorsId: MySoAddress
 	"""
 	Size of the pending active validators table.
 	"""
@@ -4282,7 +4282,7 @@ type ValidatorSet {
 	Object ID of the `Table` storing the mapping from staking pool ids to the addresses of the corresponding validators.
 	This is needed because a validator's address can potentially change but the object ID of its pool will not.
 	"""
-	stakingPoolMappingsId: SuiAddress
+	stakingPoolMappingsId: MySoAddress
 	"""
 	Size of the stake pool mappings `Table`.
 	"""
@@ -4294,7 +4294,7 @@ type ValidatorSet {
 	"""
 	Object ID of the `Table` storing the validator candidates.
 	"""
-	validatorCandidatesId: SuiAddress
+	validatorCandidatesId: MySoAddress
 	"""
 	Size of the validator candidates `Table`.
 	"""

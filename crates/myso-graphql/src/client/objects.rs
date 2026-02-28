@@ -46,7 +46,7 @@ impl Client {
         }
 
         const QUERY: &str = r#"
-            query($id: SuiAddress!) {
+            query($id: MySoAddress!) {
                 object(address: $id) {
                     objectBcs
                 }
@@ -107,7 +107,7 @@ impl Client {
         }
 
         const QUERY: &str = r#"
-            query($owner: SuiAddress!, $after: String) {
+            query($owner: MySoAddress!, $after: String) {
                 objects(filter: { owner: $owner }, after: $after) {
                     pageInfo {
                         hasNextPage
@@ -169,8 +169,8 @@ mod tests {
         use base64ct::Base64;
         use base64ct::Encoding;
 
-        // From myso-sdk-types/src/object.rs test fixtures (SUI_COIN)
-        const SUI_COIN_BCS: &[u8] = &[
+        // From myso-sdk-types/src/object.rs test fixtures (MYSO_COIN)
+        const MYSO_COIN_BCS: &[u8] = &[
             0, 1, 1, 32, 79, 43, 0, 0, 0, 0, 0, 40, 35, 95, 175, 213, 151, 87, 206, 190, 35, 131,
             79, 35, 254, 22, 15, 181, 40, 108, 28, 77, 68, 229, 107, 254, 191, 160, 196, 186, 42,
             2, 122, 53, 52, 133, 199, 58, 0, 0, 0, 0, 0, 79, 255, 208, 0, 85, 34, 190, 75, 192, 41,
@@ -179,7 +179,7 @@ mod tests {
             243, 102, 229, 253, 251, 137, 210, 101, 119, 173, 228, 51, 141, 20, 15, 85, 96, 19, 15,
             0, 0, 0, 0, 0,
         ];
-        Base64::encode_string(SUI_COIN_BCS)
+        Base64::encode_string(MYSO_COIN_BCS)
     }
 
     #[tokio::test]

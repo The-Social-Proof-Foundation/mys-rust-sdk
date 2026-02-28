@@ -58,7 +58,7 @@
 ## Added
 
 - Added support for multisig verification and aggregation ([#25])
-- Added blanket implementation for SuiSigner and SuiVerifier ([`bc481a1`])
+- Added blanket implementation for MySoSigner and MySoVerifier ([`bc481a1`])
 - Added support for der and pem format for public and private keys ([`df32a46`])
 - Added a `SimpleKeypair` type which could be either an ed25519, secp256k1, or secp256r1 keypair ([`8d64c06`])
 - Added support for verifying passkey authenticators ([#81])
